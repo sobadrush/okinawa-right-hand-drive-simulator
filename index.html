@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>沖繩第一人稱右駕模擬器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; background-color: #0f172a; overflow: hidden; }
+        #canvasContainer { position: relative; width: 100%; height: 100vh; }
+        .blink-active { animation: blink 0.5s infinite alternate; }
+        @keyframes blink {
+            0% { opacity: 0.2; }
+            100% { opacity: 1; filter: drop-shadow(0 0 8px currentColor); }
+        }
+    </style>
+</head>
+<body class="text-slate-100 select-none">
+
+    <!-- Main Game Container -->
+    <div id="canvasContainer">
+        <!-- 3D WebGL Canvas -->
+        <canvas id="drivingCanvas" class="w-full h-full"></canvas>
+
+        <!-- Windshield HUD & Notifications -->
+        <div class="absolute inset-x-0 top-6 flex flex-col items-center pointer-events-none px-4 gap-3">
+            <!-- Stage Selector & Control Card -->
+            <div class="bg-slate-900/95 border border-cyan-500/30 backdrop-blur-md rounded-2xl p-4 max-w-2xl w-full shadow-2xl flex flex-col gap-3 pointer-events-auto">
+                <div class="flex justify-between items-center flex-wrap gap-2">
+                    <div class="flex items-center gap-2">
+                        <span id="scenarioTitle" class="text-cyan-400 font-bold text-lg">載入中...</span>
+                        <span id="stageProgress" class="bg-cyan-500/10 text-cyan-400 text-xs px-2.5 py-1 rounded-full font-mono border border-cyan-500/20">關卡 1/9</span>
+                    </div>
+                    
+                    <!-- Level Dropdown Selector -->
+                    <div class="flex items-center gap-2">
+                        <label for="levelSelect" class="text-xs text-slate-400 font-semibold">選擇練習：</label>
+                        <select id="levelSelect" onchange="selectScenario(this.value)" class="bg-slate-800 border border-slate-700 rounded-lg text-xs text-cyan-300 py-1.5 px-2.5 outline-none focus:border-cyan-500 font-semibold font-mono">
+                            <option value="0">1. 左轉小彎與靠左行駛</option>
+                            <option value="1">2. 右轉大彎與禮讓對向</option>
+                            <option value="2">3. 一時停止標誌與白線</option>
+                            <option value="3">4. 紅燈 + 左轉綠箭頭 (←)</option>
+                            <option value="4">5. 閃爍黃燈 (注意慢行)</option>
+                            <option value="5">6. 閃爍紅燈 (完全煞停)</option>
+                            <option value="6">7. 紅燈 + 右轉綠箭頭 (→)</option>
+                            <option value="7">8. 紅燈 + 直行綠箭頭 (↑)</option>
+                            <option value="8">9. 綜合號誌大考驗</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <p id="scenarioDescription" class="text-sm text-slate-300">請稍候，系統初始化中...</p>
+                
+                <!-- Progress Line -->
+                <div class="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                    <div id="scenarioProgress" class="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300" style="width: 11%"></div>
+                </div>
+            </div>
+
+            <!-- Contextual Navigation Instruction Bar -->
+            <div id="hudInstruction" class="bg-slate-950/95 border border-amber-500/40 backdrop-blur-md text-amber-300 font-bold px-6 py-3 rounded-2xl text-sm shadow-xl pointer-events-auto flex items-center justify-center gap-2 max-w-lg text-center transition-all min-h-[56px] w-full">
+                🚦 系統初始化中，請稍候...
+            </div>
+
+            <!-- Wrong Lane Alert -->
+            <div id="dangerAlert" class="bg-rose-600 text-white font-bold px-6 py-2.5 rounded-full shadow-lg border border-rose-400 animate-bounce hidden">
+                ⚠️ 警告：您正逆向駛入右側車道！請立刻靠左！
+            </div>
+        </div>
+
+        <!-- Cockpit Dashboard Overlay (RHD Perspective) -->
+        <div class="absolute inset-x-0 bottom-0 pointer-events-none flex flex-col items-center">
+            <!-- Dashboard Grid -->
+            <div class="relative w-full max-w-5xl flex justify-between items-end px-12 pb-6">
+                
+                <!-- Left Control: Indicator Lights & Speedometer -->
+                <div class="bg-slate-900/90 border border-slate-700/50 backdrop-blur-md p-4 rounded-2xl shadow-2xl flex items-center gap-6 pointer-events-auto">
+                    <!-- Numeric Speed display -->
+                    <div class="flex flex-col items-center">
+                        <span class="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Speed</span>
+                        <div class="flex items-baseline gap-1 mt-1">
+                            <span id="speedValue" class="text-4xl font-black font-mono text-cyan-400">0</span>
+                            <span class="text-xs text-slate-400">km/h</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Signal Blinker controls -->
+                    <div class="flex gap-2">
+                        <button id="leftIndicatorBtn" onclick="toggleIndicator('left')" class="p-3 bg-slate-800 rounded-xl hover:bg-slate-700 transition border border-slate-600 text-slate-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                        </button>
+                        <button id="rightIndicatorBtn" onclick="toggleIndicator('right')" class="p-3 bg-slate-800 rounded-xl hover:bg-slate-700 transition border border-slate-600 text-slate-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Center: Animated 3D Steering Wheel representation -->
+                <div class="relative -mb-16 pointer-events-auto select-none flex flex-col items-center">
+                    <div id="steeringWheel" class="w-64 h-64 transition-transform duration-75 ease-out" style="transform: rotate(0deg)">
+                        <svg viewBox="0 0 200 200" class="w-full h-full drop-shadow-[0_15px_15px_rgba(0,0,0,0.6)]">
+                            <circle cx="100" cy="100" r="85" fill="none" stroke="#1e293b" stroke-width="18"/>
+                            <circle cx="100" cy="100" r="85" fill="none" stroke="#0f172a" stroke-width="4" stroke-dasharray="8 4"/>
+                            <rect x="94" y="6" width="12" height="18" fill="#ef4444" rx="2" />
+                            <path d="M15 100 H 185 M 100 100 V 175" stroke="#1e293b" stroke-width="14" stroke-linecap="round"/>
+                            <circle cx="100" cy="100" r="28" fill="#0f172a" stroke="#334155" stroke-width="3"/>
+                            <text x="100" y="105" text-anchor="middle" fill="#06b6d4" font-size="12" font-weight="bold" font-family="sans-serif">右駕</text>
+                        </svg>
+                    </div>
+                    <div class="mt-4 bg-amber-500 text-slate-950 px-4 py-1 rounded-full text-xs font-black shadow-md border border-amber-300">
+                        ⚠️ 牢記：左側通行、右轉大彎
+                    </div>
+                </div>
+
+                <!-- Right Control: Virtual Brake Pedal, Keys & Score -->
+                <div class="bg-slate-900/90 border border-slate-700/50 backdrop-blur-md p-4 rounded-2xl shadow-2xl flex items-center gap-4 pointer-events-auto">
+                    <!-- Physical Brake button for clickers -->
+                    <button id="virtualBrakeBtn" class="bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold px-4 py-3 rounded-xl transition border border-rose-500/30 flex flex-col items-center justify-center min-w-[80px] shadow-lg shadow-rose-600/20">
+                        <span class="text-[9px] uppercase tracking-wider opacity-80 font-mono">Brake</span>
+                        <span class="text-sm font-bold">煞車</span>
+                    </button>
+
+                    <div class="h-12 w-px bg-slate-700"></div>
+
+                    <!-- Keyboard bindings helper -->
+                    <div class="flex flex-col gap-1 text-[11px] text-slate-400">
+                        <div class="flex gap-1"><kbd class="bg-slate-800 px-1 py-0.5 rounded text-slate-200">↑ / W</kbd> 加速</div>
+                        <div class="flex gap-1"><kbd class="bg-slate-800 px-1 py-0.5 rounded text-slate-200">Space</kbd> 煞車不倒車</div>
+                        <div class="flex gap-1"><kbd class="bg-slate-800 px-1 py-0.5 rounded text-slate-200">← →</kbd> 方向盤</div>
+                    </div>
+
+                    <div class="h-12 w-px bg-slate-700"></div>
+
+                    <div class="text-right">
+                        <span class="text-xs text-slate-400 uppercase tracking-widest font-semibold">安全分</span>
+                        <div id="gameScore" class="text-3xl font-black font-mono text-emerald-400 mt-1">100</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Initializer & Modal Dialog overlays -->
+        <div id="gameModal" class="absolute inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-cyan-500/40 rounded-3xl p-8 max-w-md w-full shadow-2xl text-center flex flex-col items-center">
+                <div class="w-20 h-20 bg-cyan-500/10 rounded-full flex items-center justify-center border border-cyan-500/30 mb-6 animate-pulse">
+                    <span class="text-4xl">🚗</span>
+                </div>
+                <h2 id="modalTitle" class="text-2xl font-black text-slate-100 mb-3">歡迎來到沖繩右駕模擬器</h2>
+                <p id="modalDesc" class="text-sm text-slate-300 mb-6 leading-relaxed">
+                    在這裡，您將透過 3D 第一人稱視角，實際演練靠左行駛、右駕轉彎，以及沖繩當地極易出錯的各種箭頭號誌與一時停止規則！
+                </p>
+                <button id="modalActionBtn" class="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold py-3.5 px-6 rounded-2xl transition shadow-lg shadow-cyan-500/20 active:scale-95">
+                    開始挑戰 🚀
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // System & Three.js graphics contexts
+        let scene, camera, renderer;
+        let isInitialized = false;
+        let isDriving = false;
+        let keys = {};
+        let guidanceGroup = null;
+
+        // Custom stop textures generated dynamically on-the-fly
+        let stopTextTexture = null;
+        let stopSignTexture = null;
+
+        // Realistic Car Physics & Movement States
+        const car = {
+            position: new THREE.Vector3(-4, 1.2, 60),
+            angle: -Math.PI / 2,
+            speed: 0,
+            maxSpeed: 0.8,
+            acceleration: 0.008,
+            deceleration: 0.02,
+            steering: 0,
+            indicator: null,
+            indicatorTimer: 0,
+            hasStopped: false,
+            hasStarted: false,
+            stopTimer: 0
+        };
+
+        // Traffic Signaling & Oncoming Traffic Simulation States
+        let trafficLightState = 'red'; // red, yellow, green, leftArrow, rightArrow, forwardArrow, flashYellow, flashRed
+        let trafficLightTimer = 0;
+        let oncomingCar = null;
+
+        // Scoring & Scenario states
+        let score = 100;
+        let currentScenarioIndex = 0;
+        let audioCtx, engineOscillator, engineGain;
+
+
+        // Generate canvas texture for "止まれ" painted road markings
+        function createStopTextTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = '#334155'; // Road color match
+            ctx.fillRect(0, 0, 512, 256);
+            
+            // Draw standard Japanese highway stop font
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 85px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('止まれ', 256, 128);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.ClampToEdgeWrapping;
+            texture.wrapT = THREE.ClampToEdgeWrapping;
+            return texture;
+        }
+
+
+        // Generate canvas texture for Stop sign triangle
+        function createStopSignTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = '#ef4444'; // Red
+            ctx.beginPath();
+            ctx.moveTo(128, 230);
+            ctx.lineTo(10, 26);
+            ctx.lineTo(246, 26);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 34px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('止まれ', 128, 90);
+            ctx.font = 'bold 28px sans-serif';
+            ctx.fillText('STOP', 128, 145);
+            
+            return new THREE.CanvasTexture(canvas);
+        }
+
+
+        // Complete Levels Registry with fully automated validation rules & dynamic instructions
+        const scenarios = [
+            {
+                title: "1. 左轉小彎與靠左行駛",
+                desc: "前方路口為綠燈。請「打左方向燈」，並依循地面上的「綠色引導線」進行「左轉小彎」，緊貼最左側順利駛入左側車道。切勿大甩彎或開入對向車道！",
+                setup: function() {
+                    car.position.set(-4, 1.2, 50);
+                    car.angle = -Math.PI / 2;
+                    car.speed = 0;
+                    trafficLightState = 'green';
+                    if (oncomingCar) oncomingCar.position.set(4, 0.8, -120);
+                },
+                update: function() {
+                    const speedKmh = Math.round(car.speed * 100);
+                    
+                    if (car.position.x > -10 && car.position.z > 15) {
+                        document.getElementById('hudInstruction').innerHTML = `🔍 行駛中 (車速: ${speedKmh} km/h)<br>請打「左轉燈」，準備左轉！`;
+                    } else if (car.position.x > -10 && car.position.z <= 15) {
+                        if (car.indicator !== 'left') {
+                            document.getElementById('hudInstruction').innerHTML = `⚠️ 警告：即將轉彎，您忘記打左方向燈！`;
+                        } else {
+                            document.getElementById('hudInstruction').innerHTML = `🟢 已打方向燈！請沿引導線切入橫向車道的左側。`;
+                        }
+                    }
+
+                    // Check if player turned left (heading West)
+                    if (car.position.x < -10) {
+                        // Correct lane is South side of E-W road (Z > 0)
+                        if (car.position.z > 0 && car.position.z < 8) {
+                            if (car.indicator === 'left') {
+                                completeScenario("通關成功！日本左轉為小轉彎，請隨時保持緊貼左側前進。");
+                            } else {
+                                scorePenalize(15);
+                                completeScenario("順利轉向，但下回轉彎前 30 公尺記得打方向燈！");
+                            }
+                        } else {
+                            failScenario("轉彎軌跡太寬！您開入了右側逆向車道。左轉請保持在最內側！");
+                        }
+                    }
+                    
+                    if (car.position.x > 8) {
+                        failScenario("您跨越了黃色中央分向線，逆向行駛！");
+                    }
+                }
+            },
+            {
+                title: "2. 右轉大彎與禮讓對向車",
+                desc: "前方路口為綠燈。但對向有直行車前進中！日本右轉為「大彎」。請先駛入路口中央等候，等對向直行車通過後，再大弧度右轉進入左側車道！",
+                setup: function() {
+                    car.position.set(-4, 1.2, 55);
+                    car.angle = -Math.PI / 2;
+                    car.speed = 0;
+                    trafficLightState = 'green';
+                    trafficLightTimer = 0;
+                    if (oncomingCar) {
+                        oncomingCar.position.set(4, 0.8, -60);
+                        oncomingCar.visible = true;
+                    }
+                },
+                update: function() {
+                    if (oncomingCar && oncomingCar.position.z < 80) {
+                        oncomingCar.position.z += 0.35;
+                    }
+
+                    const distToOncoming = oncomingCar ? car.position.distanceTo(oncomingCar.position) : 999;
+                    
+                    if (oncomingCar && oncomingCar.position.z < 15) {
+                        document.getElementById('hudInstruction').innerHTML = `🚦 對向直行車正在通過中！<br>請在十字路口中心煞車等候，等它通過！`;
+                    } else {
+                        document.getElementById('hudInstruction').innerHTML = `🟢 對向車已通過！請打右轉燈，大弧度轉入東向車道！`;
+                    }
+
+                    if (oncomingCar && distToOncoming < 5.0) {
+                        failScenario("與對向直行車發生碰撞！右轉車輛必須無條件禮讓直行車！");
+                        return;
+                    }
+
+                    // Check right turn (heading East)
+                    if (car.position.x > 10) {
+                        // Correct lane is North side of E-W road (Z < 0)
+                        if (car.position.z < 0 && car.position.z > -8) {
+                            if (car.indicator === 'right') {
+                                completeScenario("通關成功！大彎右轉安全，且完美遵守了禮讓直行車的規範。");
+                            } else {
+                                scorePenalize(10);
+                                completeScenario("完成挑戰！但切記右轉必須打方向燈。");
+                            }
+                        } else {
+                            failScenario("轉彎軌跡錯誤！切入逆向車道（右側車道）！記住右轉要繞大圈！");
+                        }
+                    }
+
+                    if (car.position.z < 12 && car.position.z > 0 && car.position.x > -2 && oncomingCar && oncomingCar.position.z < 15) {
+                        failScenario("危險駕駛！對向直行車距離極近，您強行右轉！");
+                    }
+                }
+            },
+            {
+                title: "3. 一時停止標誌與白線",
+                desc: "前方為無號誌路口。地上有「止まれ」白色字樣及红色三角停標牌。您必須在「白線前完全煞停（0 km/h）」並維持 2 秒確認無車，才可通行！",
+                setup: function() {
+                    car.position.set(-4, 1.2, 50);
+                    car.angle = -Math.PI / 2;
+                    car.speed = 0;
+                    car.hasStopped = false;
+                    car.stopTimer = 0;
+                    trafficLightState = 'none';
+                    if (oncomingCar) oncomingCar.visible = false;
+                },
+                update: function() {
+                    const currentSpeedKmh = Math.round(car.speed * 100);
+                    
+                    // Correct stop range (before the stop line at Z=15, roughly between Z=17.5 and Z=21.5)
+                    if (car.position.z > 17.5 && car.position.z < 21.5) {
+                        if (currentSpeedKmh === 0) {
+                            car.stopTimer++;
+                            const remaining = Math.max(0, 2 - Math.floor(car.stopTimer / 60));
+                            document.getElementById('hudInstruction').innerHTML = `🛑 偵測到於停止線前煞停！<br>請持續按住煞車確認左右來車 (${remaining}秒)...`;
+                            if (car.stopTimer >= 120) {
+                                car.hasStopped = true;
+                            }
+                        } else {
+                            document.getElementById('hudInstruction').innerHTML = `⚠️ 進入煞車區！請按下「空白鍵」使時速降為 0！`;
+                        }
+                    } else if (car.position.z <= 17.5 && car.position.z > 14) {
+                        // Exceeded stop zone without stopping
+                        if (!car.hasStopped) {
+                            failScenario("越線違規！您越過白線仍未完成一時停止煞停。");
+                        } else {
+                            document.getElementById('hudInstruction').innerHTML = `🟢 檢查完畢！安全無車，請踩油門通過路口！`;
+                        }
+                    } else if (car.position.z <= 14) {
+                        if (car.hasStopped) {
+                            completeScenario("標準的「一時停止」！完美地在白線前完全停下並等候左右檢查！");
+                        } else {
+                            failScenario("闖「一時停止」路口！日本警方對此執法極嚴格。");
+                        }
+                    } else {
+                        document.getElementById('hudInstruction').innerHTML = `🛣️ 前方無號誌，注意「止まれ」標誌，準備煞停！`;
+                    }
+                }
+            },
+            {
+                title: "4. 紅燈 + 左轉綠箭頭 (←)",
+                desc: "前方紅綠燈為紅燈，但下方「左轉綠色箭頭」亮起。依日本法規，左轉車輛擁有優先通行權。請打左轉燈並大膽完成左轉！",
+                setup: function() {
+                    car.position.set(-4, 1.2, 50);
+                    car.angle = -Math.PI / 2;
+                    car.speed = 0;
+                    trafficLightState = 'leftArrow'; // Red + left green arrow
+                    if (oncomingCar) oncomingCar.visible = false;
+                },
+                update: function() {
+                    if (car.position.z > 15) {
+                        document.getElementById('hudInstruction').innerHTML = `🚦 目前是主紅燈 + 左轉綠箭頭亮起！<br>左轉車可以通行！請打左轉燈出發。`;
+                    } else {
+                        document.getElementById('hudInstruction').innerHTML = `🟢 順著綠色箭頭，安全左轉！`;
+                    }
+
+                    if (car.position.x < -10) {
+                        if (car.position.z > 0 && car.position.z < 8) {
+                            if (car.indicator === 'left') {
+                                completeScenario("通關成功！日本看見紅燈時，只要對應方向之綠色箭頭亮起即可通行。");
+                            } else {
+                                scorePenalize(10);
+                                completeScenario("過關！但請養成轉彎打方向燈的習慣。");
+                            }
+                        } else {
+                            failScenario("轉彎軌跡太寬！駛入了逆向車道！");
+                        }
+                    }
+                }
+            },
+            {
+                title: "5. 閃爍黃燈 (注意慢行)",
+                desc: "前方路口為「閃爍黃燈」。日本閃爍黃燈代表「可前進，但需特別注意交叉路口車流與行人」。無須強行煞停，請慢行直行通過路口！",
+                setup: function() {
+                    car.position.set(-4, 1.2, 55);
+                    car.angle = -Math.PI / 2;
+                    car.speed = 0;
+                    car.hasStarted = false; // Add guard flag to prevent instant failure at load
+                    trafficLightState = 'flashYellow';
+                    if (oncomingCar) oncomingCar.visible = false;
+                },
+                update: function() {
+                    const currentSpeedKmh = Math.round(car.speed * 100);
+                    
+                    if (currentSpeedKmh > 5) {
+                        car.hasStarted = true;
+                    }
+
+                    if (car.position.z > 15) {
+                        if (car.hasStarted && currentSpeedKmh === 0) {
+                            failScenario("警告！在閃爍黃燈前緊急停車會造成後方車輛追撞！請保持慢速前進。");
+                        } else {
+                            document.getElementById('hudInstruction').innerHTML = `⚠️ 閃爍黃燈：代表「注意慢行」，無須煞停！請保持中低速直行通過。`;
+                        }
+                    } else {
+                        document.getElementById('hudInstruction').innerHTML = `🟢 順利通過！`;
+                    }
+
+                    if (car.position.z < -10) {
+                        completeScenario("完美過關！閃爍黃燈只需要注意減速，不需要強制停車。");
+                    }
+                }
+            },
+            {
+                title: "6. 閃爍紅燈 (完全煞停)",
+                desc: "前方路口為「閃爍紅燈」。日本閃爍紅燈法律等同於「一時停止」。您必須在停止線前「完全煞停至 0 km/h」維持 2 秒確認安全後，才可繼續前進！",
+                setup: function() {
+                    car.position.set(-4, 1.2, 50);
+                    car.angle = -Math.PI / 2;
+                    car.speed = 0;
+                    car.hasStopped = false;
+                    car.stopTimer = 0;
+                    trafficLightState = 'flashRed';
+                    if (oncomingCar) oncomingCar.visible = false;
+                },
+                update: function() {
+                    const currentSpeedKmh = Math.round(car.speed * 100);
+                    
+                    if (car.position.z > 17.5 && car.position.z < 21.5) {
+                        if (currentSpeedKmh === 0) {
+                            car.stopTimer++;
+                            const remaining = Math.max(0, 2 - Math.floor(car.stopTimer / 60));
+                            document.getElementById('hudInstruction').innerHTML = `🛑 偵測到於停止線前完全煞停！<br>確認左右來車中 (${remaining}秒)...`;
+                            if (car.stopTimer >= 120) {
+                                car.hasStopped = true;
+                            }
+                        } else {
+                            document.getElementById('hudInstruction').innerHTML = `⚠️ 閃爍紅燈等同「一時停止」！請在線前降速至 0 km/h！`;
+                        }
+                    } else if (car.position.z <= 17.5 && car.position.z > 14) {
+                        if (!car.hasStopped) {
+                            failScenario("越線違規！您越過白線仍未完成閃爍紅燈煞停動作。");
+                        } else {
+                            document.getElementById('hudInstruction').innerHTML = `🟢 已完成法定煞停！請踩油門安全通行。`;
+                        }
+                    } else if (car.position.z <= 14) {
+                        if (car.hasStopped) {
+                            completeScenario("成功通過！閃爍紅燈等同於一時停止，請務必完全停下。");
+                        } else {
+                            failScenario("闖閃爍紅燈路口！此為重大危險行車違規。");
+                        }
+                    } else {
+                        document.getElementById('hudInstruction').innerHTML = `🚦 前方是閃爍紅燈，等同於停止標誌，請做好煞停準備！`;
+                    }
+                }
+            },
+            {
+                title: "7. 紅燈 + 右轉綠箭頭 (→)",
+                desc: "前方紅綠燈主燈為紅燈，但下方「右轉綠色箭頭」亮起。表示右轉車輛可以直行並大彎右轉。此時對向車道為紅燈煞停狀態，請大膽右轉！",
+                setup: function() {
+                    car.position.set(-4, 1.2, 55);
+                    car.angle = -Math.PI / 2;
+                    car.speed = 0;
+                    trafficLightState = 'rightArrow'; // Red + right green arrow
+                    if (oncomingCar) {
+                        oncomingCar.position.set(4, 0.8, 12); // Stop before line
+                        oncomingCar.visible = true;
+                    }
+                },
+                update: function() {
+                    if (car.position.z > 15) {
+                        document.getElementById('hudInstruction').innerHTML = `🚦 主紅燈 + 右轉綠箭頭亮起！<br>打右轉燈，沿著引導線進行大右轉！`;
+                    } else {
+                        document.getElementById('hudInstruction').innerHTML = `🟢 對向車輛為紅燈等候，安全大彎右轉！`;
+                    }
+
+                    if (car.position.x > 10) {
+                        if (car.position.z < 0 && car.position.z > -8) {
+                            if (car.indicator === 'right') {
+                                completeScenario("完美大右轉！右轉綠箭頭亮起時，可以放心右轉，對向直行車為紅燈煞停。");
+                            } else {
+                                scorePenalize(10);
+                                completeScenario("過關！但請習慣右轉打燈喔。");
+                            }
+                        } else {
+                            failScenario("轉彎軌跡錯誤！切入逆向車道！記住右轉大彎！");
+                        }
+                    }
+                }
+            },
+            {
+                title: "8. 紅燈 + 直行綠箭頭 (↑)",
+                desc: "前方主燈為紅燈，但下方「直行綠色箭頭」亮起。表示僅可直行前進。請筆直前行穿過路口，切勿轉彎！",
+                setup: function() {
+                    car.position.set(-4, 1.2, 55);
+                    car.angle = -Math.PI / 2;
+                    car.speed = 0;
+                    trafficLightState = 'forwardArrow'; // Red + forward arrow
+                    if (oncomingCar) oncomingCar.visible = false;
+                },
+                update: function() {
+                    if (car.position.z > 15) {
+                        document.getElementById('hudInstruction').innerHTML = `🚦 主紅燈 + 直行綠箭頭亮起！<br>僅限「直行」通過！請加速往前。`;
+                    } else {
+                        document.getElementById('hudInstruction').innerHTML = `🟢 通過路口，保持直行！`;
+                    }
+
+                    if (car.position.x < -10 || car.position.x > 10) {
+                        failScenario("違規行駛！在僅限直行綠色箭頭時進行轉彎！");
+                    }
+
+                    if (car.position.z < -20) {
+                        completeScenario("通關成功！直行箭頭亮起代表只能前進、禁止左右轉。");
+                    }
+                }
+            },
+            {
+                title: "9. 綜合號誌大考驗",
+                desc: "終極考試！號誌為紅燈，下方亮起了「左轉與直行雙箭頭」 (← ↑)。此時您可以左轉或直行。請在此關完成標準的左轉小彎進入橫向車道！",
+                setup: function() {
+                    car.position.set(-4, 1.2, 50);
+                    car.angle = -Math.PI / 2;
+                    car.speed = 0;
+                    trafficLightState = 'leftAndForwardArrows'; // Custom scenario complex
+                    if (oncomingCar) oncomingCar.visible = false;
+                },
+                update: function() {
+                    if (car.position.z > 15) {
+                        document.getElementById('hudInstruction').innerHTML = `🚦 複合號誌：左轉(←)與直行(↑)箭頭亮起！<br>右轉禁止！請打左轉燈並小彎左轉！`;
+                    } else {
+                        document.getElementById('hudInstruction').innerHTML = `🟢 切記：左轉繞小圈，保持左側通行。`;
+                    }
+
+                    if (car.position.x < -10) {
+                        if (car.position.z > 0 && car.position.z < 8) {
+                            if (car.indicator === 'left') {
+                                completeScenario("恭喜！您已成功通過所有的沖繩右駕與號誌關卡挑戰！自駕旅行平安！");
+                            } else {
+                                scorePenalize(10);
+                                completeScenario("通過了！但以後切記轉彎時打方向燈！");
+                            }
+                        } else {
+                            failScenario("左轉軌跡過大，駛入右方對向車道！");
+                        }
+                    }
+                    
+                    if (car.position.x > 10) {
+                        failScenario("右轉違規！此號誌僅允許左轉或直行！");
+                    }
+                }
+            }
+        ];
+
+
+        // Initialize Web Audio API
+        function initAudio() {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            } catch (e) {
+                console.warn("音訊套件無法加載：", e);
+            }
+        }
+
+
+        // Play synthesized sound effects
+        function playSound(type) {
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            const now = audioCtx.currentTime;
+            
+            if (type === 'tick') {
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(800, now);
+                osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.05);
+            } else if (type === 'success') {
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, now);
+                osc.frequency.setValueAtTime(659.25, now + 0.1);
+                osc.frequency.setValueAtTime(783.99, now + 0.2);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.4);
+            } else if (type === 'fail') {
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(130.81, now);
+                osc.frequency.linearRampToValueAtTime(100, now + 0.3);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            }
+        }
+
+
+        // Infinite engine hum audio synthesis
+        function startEngineHum() {
+            if (!audioCtx || engineOscillator) return;
+            engineOscillator = audioCtx.createOscillator();
+            engineGain = audioCtx.createGain();
+            
+            engineOscillator.type = 'sawtooth';
+            engineOscillator.frequency.setValueAtTime(60, audioCtx.currentTime);
+            
+            let filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(180, audioCtx.currentTime);
+
+            engineGain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+
+            engineOscillator.connect(filter);
+            filter.connect(engineGain);
+            engineGain.connect(audioCtx.destination);
+            
+            engineOscillator.start();
+        }
+
+
+        // Pitch adjustment based on speed
+        function updateEnginePitch(speed) {
+            if (!engineOscillator) return;
+            let pitch = 55 + (speed * 180);
+            engineOscillator.frequency.setTargetAtTime(pitch, audioCtx.currentTime, 0.1);
+        }
+
+
+        // Setup Three.js environment
+        function init3D() {
+            const container = document.getElementById('canvasContainer');
+            if (typeof THREE === 'undefined') {
+                console.error("Three.js is not loaded.");
+                return false;
+            }
+
+            try {
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(0xa5f3fc); // Sky Blue
+                scene.fog = new THREE.FogExp2(0xa5f3fc, 0.015);
+
+                camera = new THREE.PerspectiveCamera(65, container.clientWidth / container.clientHeight, 0.1, 1000);
+                
+                renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('drivingCanvas'), antialias: true });
+                renderer.setSize(container.clientWidth, container.clientHeight);
+                renderer.shadowMap.enabled = true;
+
+                // Lighting
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+                scene.add(ambientLight);
+
+                const sunLight = new THREE.DirectionalLight(0xfffbeb, 1.2);
+                sunLight.position.set(40, 60, -20);
+                sunLight.castShadow = true;
+                scene.add(sunLight);
+
+                // Dynamically build textures
+                stopTextTexture = createStopTextTexture();
+                stopSignTexture = createStopSignTexture();
+
+                buildEnvironment();
+                isInitialized = true;
+                return true;
+            } catch (e) {
+                console.error("3D Context creation failed:", e);
+                return false;
+            }
+        }
+
+
+        // Build road geometry and scene decorations
+        function buildEnvironment() {
+            // Grass
+            const groundGeo = new THREE.PlaneGeometry(1000, 1000);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.95 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // N-S Road & E-W Road planes
+            const roadMaterial = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 });
+
+            const nsRoadGeo = new THREE.PlaneGeometry(16, 400);
+            const nsRoad = new THREE.Mesh(nsRoadGeo, roadMaterial);
+            nsRoad.rotation.x = -Math.PI / 2;
+            nsRoad.position.y = 0.01;
+            nsRoad.receiveShadow = true;
+            scene.add(nsRoad);
+
+            const ewRoadGeo = new THREE.PlaneGeometry(400, 16);
+            const ewRoad = new THREE.Mesh(ewRoadGeo, roadMaterial);
+            ewRoad.rotation.x = -Math.PI / 2;
+            ewRoad.position.y = 0.01;
+            ewRoad.receiveShadow = true;
+            scene.add(ewRoad);
+
+            // Yellow Center lines (X = 0, Z = 0)
+            const yellowLineMat = new THREE.MeshBasicMaterial({ color: 0xfabf2c });
+            const whiteLineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+            const nsCenterGeo = new THREE.PlaneGeometry(0.2, 400);
+            const nsCenter = new THREE.Mesh(nsCenterGeo, yellowLineMat);
+            nsCenter.rotation.x = -Math.PI / 2;
+            nsCenter.position.set(0, 0.02, 0);
+            scene.add(nsCenter);
+
+            const ewCenter = new THREE.Mesh(new THREE.PlaneGeometry(400, 0.2), yellowLineMat);
+            ewCenter.rotation.x = -Math.PI / 2;
+            ewCenter.position.set(0, 0.02, 0);
+            scene.add(ewCenter);
+
+            // Stop line paint for players at Z=15 (Stop before line!)
+            const stopLinePlayer = new THREE.Mesh(new THREE.PlaneGeometry(8, 0.6), whiteLineMat);
+            stopLinePlayer.rotation.x = -Math.PI / 2;
+            stopLinePlayer.position.set(-4, 0.03, 15);
+            scene.add(stopLinePlayer);
+
+            // "止まれ" painted road texture plane at Z=20
+            const textPlaneGeo = new THREE.PlaneGeometry(4, 2);
+            const textPlaneMat = new THREE.MeshBasicMaterial({ map: stopTextTexture, transparent: true });
+            const textPlane = new THREE.Mesh(textPlaneGeo, textPlaneMat);
+            textPlane.rotation.x = -Math.PI / 2;
+            textPlane.rotation.z = Math.PI; // Face driving direction
+            textPlane.position.set(-4, 0.04, 22);
+            scene.add(textPlane);
+
+            // Japanese STOP sign triangular post
+            const stopSignPost = createStopSignPost();
+            stopSignPost.position.set(-9, 0, 15.5);
+            scene.add(stopSignPost);
+
+            // Traffic Light Poles
+            createTrafficLights();
+
+            // Oncoming vehicle mock object
+            const carGeo = new THREE.BoxGeometry(2.4, 1.6, 4.5);
+            const carMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.5 });
+            oncomingCar = new THREE.Mesh(carGeo, carMat);
+            oncomingCar.position.set(4, 0.8, -120);
+            scene.add(oncomingCar);
+
+            // Populate landscape with scenic Okinawa Palm trees
+            for (let i = -160; i <= 160; i += 32) {
+                if (Math.abs(i) > 16) {
+                    scene.add(createPalmTree(-12, i));
+                    scene.add(createPalmTree(12, i));
+                    scene.add(createPalmTree(-16, i));
+                    scene.add(createPalmTree(16, i));
+                }
+            }
+        }
+
+
+        // Build Palm trees
+        function createPalmTree(x, z) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+
+            const trunkGeo = new THREE.CylinderGeometry(0.15, 0.35, 6, 6);
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x78350f });
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.y = 3;
+            trunk.castShadow = true;
+            group.add(trunk);
+
+            const leafGeo = new THREE.ConeGeometry(2, 1.2, 5);
+            const leafMat = new THREE.MeshStandardMaterial({ color: 0x166534 });
+            for (let i = 0; i < 4; i++) {
+                const leaf = new THREE.Mesh(leafGeo, leafMat);
+                leaf.position.set(Math.sin(i) * 0.4, 5.8, Math.cos(i) * 0.4);
+                leaf.rotation.x = 0.4;
+                leaf.rotation.y = i * Math.PI / 2;
+                group.add(leaf);
+            }
+
+            return group;
+        }
+
+
+        // Build Japan triangular sign pole
+        function createStopSignPost() {
+            const group = new THREE.Group();
+
+            const poleGeo = new THREE.CylinderGeometry(0.08, 0.08, 7.5, 8);
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8 });
+            const pole = new THREE.Mesh(poleGeo, poleMat);
+            pole.position.y = 3.75;
+            group.add(pole);
+
+            // Plane for Stop Sign triangular face
+            const signGeo = new THREE.PlaneGeometry(1.6, 1.6);
+            const signMat = new THREE.MeshBasicMaterial({ map: stopSignTexture, transparent: true, side: THREE.DoubleSide });
+            const signFace = new THREE.Mesh(signGeo, signMat);
+            signFace.position.set(0, 6.5, 0);
+            signFace.rotation.y = 0; // Face the driver
+            group.add(signFace);
+
+            return group;
+        }
+
+
+        // Build full 3D Traffic Light with arrow indicators below
+        let lightsMeshGroup = {};
+        function createTrafficLights() {
+            const group = new THREE.Group();
+            group.position.set(9, 0, -9); // NE Corner
+
+            const poleGeo = new THREE.CylinderGeometry(0.18, 0.18, 10, 8);
+            const metalMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.75 });
+            const pole = new THREE.Mesh(poleGeo, metalMat);
+            pole.position.y = 5;
+            group.add(pole);
+
+            const armGeo = new THREE.CylinderGeometry(0.13, 0.13, 10, 8);
+            const arm = new THREE.Mesh(armGeo, metalMat);
+            arm.rotation.z = Math.PI / 2;
+            arm.position.set(-5, 9, 0);
+            group.add(arm);
+
+            // Main box (Red, Yellow, Green)
+            const boxGeo = new THREE.BoxGeometry(3.2, 1.2, 0.8);
+            const boxMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
+            const box = new THREE.Mesh(boxGeo, boxMat);
+            box.position.set(-6, 9, 0.5);
+            group.add(box);
+
+            // Downward arrow indicators box (←, ↑, →)
+            const arrowsBoxGeo = new THREE.BoxGeometry(3.2, 1.1, 0.8);
+            const arrowsBox = new THREE.Mesh(arrowsBoxGeo, boxMat);
+            arrowsBox.position.set(-6, 7.8, 0.5);
+            group.add(arrowsBox);
+
+            const lensGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.1, 16);
+            lensGeo.rotateX(Math.PI / 2);
+
+            // Main standard lenses
+            const redLens = new THREE.Mesh(lensGeo, new THREE.MeshBasicMaterial({ color: 0x3f0000 }));
+            redLens.position.set(-7, 9, 0.95);
+            group.add(redLens);
+            lightsMeshGroup['red'] = redLens;
+
+            const yellowLens = new THREE.Mesh(lensGeo, new THREE.MeshBasicMaterial({ color: 0x3f3f00 }));
+            yellowLens.position.set(-6, 9, 0.95);
+            group.add(yellowLens);
+            lightsMeshGroup['yellow'] = yellowLens;
+
+            const greenLens = new THREE.Mesh(lensGeo, new THREE.MeshBasicMaterial({ color: 0x003f00 }));
+            greenLens.position.set(-5, 9, 0.95);
+            group.add(greenLens);
+            lightsMeshGroup['green'] = greenLens;
+
+            // Downward green arrow lenses
+            const leftArrowLens = new THREE.Mesh(lensGeo, new THREE.MeshBasicMaterial({ color: 0x001a00 }));
+            leftArrowLens.position.set(-7, 7.8, 0.95);
+            group.add(leftArrowLens);
+            lightsMeshGroup['leftArrow'] = leftArrowLens;
+
+            const forwardArrowLens = new THREE.Mesh(lensGeo, new THREE.MeshBasicMaterial({ color: 0x001a00 }));
+            forwardArrowLens.position.set(-6, 7.8, 0.95);
+            group.add(forwardArrowLens);
+            lightsMeshGroup['forwardArrow'] = forwardArrowLens;
+
+            const rightArrowLens = new THREE.Mesh(lensGeo, new THREE.MeshBasicMaterial({ color: 0x001a00 }));
+            rightArrowLens.position.set(-5, 7.8, 0.95);
+            group.add(rightArrowLens);
+            lightsMeshGroup['rightArrow'] = rightArrowLens;
+
+            scene.add(group);
+        }
+
+
+        // Update Traffic Light emissions dynamically in game loop
+        function updateTrafficLightEmission() {
+            // Dark state reset
+            lightsMeshGroup['red'].material.color.setHex(0x310000);
+            lightsMeshGroup['yellow'].material.color.setHex(0x313100);
+            lightsMeshGroup['green'].material.color.setHex(0x003100);
+            lightsMeshGroup['leftArrow'].material.color.setHex(0x001600);
+            lightsMeshGroup['forwardArrow'].material.color.setHex(0x001600);
+            lightsMeshGroup['rightArrow'].material.color.setHex(0x001600);
+
+            if (trafficLightState === 'green') {
+                lightsMeshGroup['green'].material.color.setHex(0x10b981);
+            } else if (trafficLightState === 'yellow') {
+                lightsMeshGroup['yellow'].material.color.setHex(0xeab308);
+            } else if (trafficLightState === 'red') {
+                lightsMeshGroup['red'].material.color.setHex(0xef4444);
+            } else if (trafficLightState === 'leftArrow') {
+                lightsMeshGroup['red'].material.color.setHex(0xef4444);
+                lightsMeshGroup['leftArrow'].material.color.setHex(0x10b981); // Left Green Arrow
+            } else if (trafficLightState === 'rightArrow') {
+                lightsMeshGroup['red'].material.color.setHex(0xef4444);
+                lightsMeshGroup['rightArrow'].material.color.setHex(0x10b981); // Right Green Arrow
+            } else if (trafficLightState === 'forwardArrow') {
+                lightsMeshGroup['red'].material.color.setHex(0xef4444);
+                lightsMeshGroup['forwardArrow'].material.color.setHex(0x10b981); // Forward Green Arrow
+            } else if (trafficLightState === 'leftAndForwardArrows') {
+                lightsMeshGroup['red'].material.color.setHex(0xef4444);
+                lightsMeshGroup['leftArrow'].material.color.setHex(0x10b981);
+                lightsMeshGroup['forwardArrow'].material.color.setHex(0x10b981);
+            } else if (trafficLightState === 'flashYellow') {
+                // Flash every 30 frames
+                if (Math.floor(Date.now() / 300) % 2 === 0) {
+                    lightsMeshGroup['yellow'].material.color.setHex(0xeab308);
+                }
+            } else if (trafficLightState === 'flashRed') {
+                if (Math.floor(Date.now() / 300) % 2 === 0) {
+                    lightsMeshGroup['red'].material.color.setHex(0xef4444);
+                }
+            }
+        }
+
+
+        // Dynamically build guidance flat circles on top of the road surface for RHD positioning
+        function updateGuidanceLines(scenarioIndex) {
+            if (guidanceGroup) {
+                scene.remove(guidanceGroup);
+            }
+
+            guidanceGroup = new THREE.Group();
+            let curvePoints = [];
+
+            // Define custom route line configurations
+            if (scenarioIndex === 0 || scenarioIndex === 3 || scenarioIndex === 8) {
+                // Left Turn curves (West-bound South-lane)
+                curvePoints = [
+                    new THREE.Vector3(-4, 0.05, 50),
+                    new THREE.Vector3(-4, 0.05, 12),
+                    new THREE.Vector3(-5, 0.05, 6),
+                    new THREE.Vector3(-10, 0.05, 4),
+                    new THREE.Vector3(-60, 0.05, 4)
+                ];
+            } else if (scenarioIndex === 1 || scenarioIndex === 6) {
+                // Right Turn curve (East-bound North-lane)
+                curvePoints = [
+                    new THREE.Vector3(-4, 0.05, 55),
+                    new THREE.Vector3(-4, 0.05, 4),
+                    new THREE.Vector3(-2, 0.05, -2),
+                    new THREE.Vector3(4, 0.05, -4),
+                    new THREE.Vector3(60, 0.05, -4)
+                ];
+            } else if (scenarioIndex === 2 || scenarioIndex === 5 || scenarioIndex === 7) {
+                // Straight path (North-bound West-lane)
+                curvePoints = [
+                    new THREE.Vector3(-4, 0.05, 50),
+                    new THREE.Vector3(-4, 0.05, 15),
+                    new THREE.Vector3(-4, 0.05, -60)
+                ];
+            } else if (scenarioIndex === 4) {
+                // Slow straight path (North-bound West-lane)
+                curvePoints = [
+                    new THREE.Vector3(-4, 0.05, 55),
+                    new THREE.Vector3(-4, 0.05, -60)
+                ];
+            }
+
+            const curve = new THREE.CatmullRomCurve3(curvePoints);
+            const points = curve.getPoints(scenarioIndex === 2 || scenarioIndex === 5 ? 24 : 36);
+
+            const dotGeometry = new THREE.CircleGeometry(0.2, 8);
+            dotGeometry.rotateX(-Math.PI / 2);
+
+            const dotMaterial = new THREE.MeshBasicMaterial({
+                color: 0x10b981,
+                transparent: true,
+                opacity: 0.65,
+                depthWrite: false
+            });
+
+            points.forEach((p, idx) => {
+                // Draw a red stopping cue circle at Z=19.5 (Stop before white line zone)
+                if ((scenarioIndex === 2 || scenarioIndex === 5) && idx === 7) {
+                    const stopGeometry = new THREE.CircleGeometry(0.55, 8);
+                    stopGeometry.rotateX(-Math.PI / 2);
+                    const stopMaterial = new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.85, depthWrite: false });
+                    const stopDot = new THREE.Mesh(stopGeometry, stopMaterial);
+                    stopDot.position.copy(p);
+                    guidanceGroup.add(stopDot);
+                } else {
+                    const dotMesh = new THREE.Mesh(dotGeometry, dotMaterial);
+                    dotMesh.position.copy(p);
+                    guidanceGroup.add(dotMesh);
+                }
+            });
+
+            scene.add(guidanceGroup);
+        }
+
+
+        // Synchronize keyboard layouts and virtual buttons
+        function setupControls() {
+            window.addEventListener('keydown', (e) => {
+                if (e.key === ' ' || e.code === 'Space') {
+                    e.preventDefault();
+                    keys[' '] = true;
+                }
+                keys[e.key] = true;
+                
+                if (audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                startEngineHum();
+            });
+
+            window.addEventListener('keyup', (e) => {
+                if (e.key === ' ' || e.code === 'Space') {
+                    keys[' '] = false;
+                }
+                keys[e.key] = false;
+            });
+
+            // Virtual brake pad handlers
+            const brakeBtn = document.getElementById('virtualBrakeBtn');
+            if (brakeBtn) {
+                const pressBrake = (e) => {
+                    e.preventDefault();
+                    keys[' '] = true;
+                    startEngineHum();
+                };
+                const releaseBrake = () => {
+                    keys[' '] = false;
+                };
+
+                brakeBtn.addEventListener('mousedown', pressBrake);
+                brakeBtn.addEventListener('mouseup', releaseBrake);
+                brakeBtn.addEventListener('touchstart', pressBrake);
+                brakeBtn.addEventListener('touchend', releaseBrake);
+            }
+        }
+
+
+        // Toggle cockpit indicators
+        function toggleIndicator(side) {
+            playSound('tick');
+            const leftBtn = document.getElementById('leftIndicatorBtn');
+            const rightBtn = document.getElementById('rightIndicatorBtn');
+
+            if (car.indicator === side) {
+                car.indicator = null;
+                leftBtn.className = "p-3 bg-slate-800 rounded-xl hover:bg-slate-700 transition border border-slate-600 text-slate-400";
+                rightBtn.className = "p-3 bg-slate-800 rounded-xl hover:bg-slate-700 transition border border-slate-600 text-slate-400";
+            } else {
+                car.indicator = side;
+                if (side === 'left') {
+                    leftBtn.className = "p-3 bg-slate-800 rounded-xl hover:bg-slate-700 transition border border-amber-500 text-amber-400 blink-active";
+                    rightBtn.className = "p-3 bg-slate-800 rounded-xl hover:bg-slate-700 transition border border-slate-600 text-slate-400";
+                } else {
+                    rightBtn.className = "p-3 bg-slate-800 rounded-xl hover:bg-slate-700 transition border border-amber-500 text-amber-400 blink-active";
+                    leftBtn.className = "p-3 bg-slate-800 rounded-xl hover:bg-slate-700 transition border border-slate-600 text-slate-400";
+                }
+            }
+        }
+
+
+        // Select Scenario level dropdown
+        function selectScenario(index) {
+            loadScenario(parseInt(index));
+        }
+
+
+        // Scenario load state modifier
+        function loadScenario(index) {
+            currentScenarioIndex = index;
+            const scenario = scenarios[index];
+            
+            document.getElementById('levelSelect').value = index;
+            document.getElementById('scenarioTitle').innerText = scenario.title;
+            document.getElementById('scenarioDescription').innerText = scenario.desc;
+            document.getElementById('stageProgress').innerText = `關卡 ${index + 1}/${scenarios.length}`;
+            document.getElementById('scenarioProgress').style.width = `${((index + 1) / scenarios.length) * 100}%`;
+
+            // Reset dialog
+            document.getElementById('modalTitle').innerText = scenario.title;
+            document.getElementById('modalDesc').innerText = scenario.desc;
+            document.getElementById('modalActionBtn').innerText = "啟動引擎開始挑戰 🚀";
+            document.getElementById('modalActionBtn').onclick = startCurrentScenario;
+            document.getElementById('gameModal').classList.remove('hidden');
+            
+            isDriving = false;
+
+            // Reset vehicle variables
+            car.indicator = null;
+            car.steering = 0;
+            car.speed = 0;
+            document.getElementById('leftIndicatorBtn').className = "p-3 bg-slate-800 rounded-xl hover:bg-slate-700 transition border border-slate-600 text-slate-400";
+            document.getElementById('rightIndicatorBtn').className = "p-3 bg-slate-800 rounded-xl hover:bg-slate-700 transition border border-slate-600 text-slate-400";
+
+            scenario.setup();
+            updateGuidanceLines(index);
+            update3DCamera();
+        }
+
+
+        // Close Dialog to launch the game
+        function startCurrentScenario() {
+            document.getElementById('gameModal').classList.add('hidden');
+            isDriving = true;
+            startEngineHum();
+        }
+
+
+        // Scenario Success Dialog
+        function completeScenario(successMessage) {
+            isDriving = false;
+            playSound('success');
+            
+            const nextIndex = currentScenarioIndex + 1;
+            if (nextIndex < scenarios.length) {
+                document.getElementById('modalTitle').innerText = "🎉 順利通關！";
+                document.getElementById('modalDesc').innerText = successMessage;
+                document.getElementById('modalActionBtn').innerText = "挑戰下一關 ➡️";
+                document.getElementById('modalActionBtn').onclick = function() {
+                    loadScenario(nextIndex);
+                };
+            } else {
+                document.getElementById('modalTitle').innerText = "🏆 恭喜畢業！";
+                document.getElementById('modalDesc').innerText = `${successMessage}\n\n您已通過所有沖繩右駕的核心練習！請保持安全駕駛意識。安全得分：${score}分！`;
+                document.getElementById('modalActionBtn').innerText = "重新挑戰 🔄";
+                document.getElementById('modalActionBtn').onclick = function() {
+                    score = 100;
+                    document.getElementById('gameScore').innerText = score;
+                    loadScenario(0);
+                };
+            }
+            document.getElementById('gameModal').classList.remove('hidden');
+        }
+
+
+        // Scenario Failure Dialog
+        function failScenario(errorMessage) {
+            isDriving = false;
+            playSound('fail');
+            scorePenalize(15);
+
+            document.getElementById('modalTitle').innerText = "💥 發生交通違規！";
+            document.getElementById('modalDesc').innerText = errorMessage + "\n\n日本交通法規極度嚴格，請牢記：\n1. 靠左行駛。\n2. 右轉繞大圈、左轉繞小圈。";
+            document.getElementById('modalActionBtn').innerText = "重新挑戰本關 🔄";
+            document.getElementById('modalActionBtn').onclick = function() {
+                loadScenario(currentScenarioIndex);
+            };
+            document.getElementById('gameModal').classList.remove('hidden');
+        }
+
+
+        // Deduct safety scores
+        function scorePenalize(points) {
+            score = Math.max(0, score - points);
+            document.getElementById('gameScore').innerText = score;
+        }
+
+
+        // Real-time aerodynamic and drag based physical kinematics
+        function updateDrivingPhysics() {
+            let targetAcceleration = 0;
+
+            // Spacebar / Custom Brake button (strictly brakes without reverse)
+            if (keys[' ']) {
+                targetAcceleration = -car.deceleration;
+                car.speed += targetAcceleration;
+                car.speed *= 0.90; // High friction active deceleration
+                if (Math.abs(car.speed) < 0.01) {
+                    car.speed = 0;
+                }
+            } else if (keys['ArrowUp'] || keys['w'] || keys['W']) {
+                targetAcceleration = car.acceleration;
+                car.speed += targetAcceleration;
+                car.speed *= 0.985; // Air drag
+            } else if (keys['ArrowDown'] || keys['s'] || keys['S']) {
+                // Reverse gear
+                targetAcceleration = -car.deceleration * 0.4;
+                car.speed += targetAcceleration;
+                car.speed *= 0.95;
+            } else {
+                // Natural engine braking coasting resistance
+                car.speed *= 0.97;
+                if (Math.abs(car.speed) < 0.005) {
+                    car.speed = 0;
+                }
+            }
+
+            car.speed = THREE.MathUtils.clamp(car.speed, -car.maxSpeed / 2, car.maxSpeed);
+
+            // Speed sensitive steering
+            const maxSteering = 0.07;
+            let steeringFactor = 1.0;
+            if (Math.abs(car.speed) > 0.1) {
+                steeringFactor = 0.5 + (0.5 * (1.0 - (Math.abs(car.speed) / car.maxSpeed)));
+            }
+
+            if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+                car.steering = Math.max(car.steering - 0.005 * steeringFactor, -maxSteering * steeringFactor);
+            } else if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+                car.steering = Math.min(car.steering + 0.005 * steeringFactor, maxSteering * steeringFactor);
+            } else {
+                // Return to center
+                if (car.steering > 0) car.steering = Math.max(0, car.steering - 0.004);
+                if (car.steering < 0) car.steering = Math.min(0, car.steering + 0.004);
+            }
+
+            // heading integration
+            car.angle += car.steering * (car.speed * 2.4);
+            car.position.x += Math.cos(car.angle) * car.speed;
+            car.position.z += Math.sin(car.angle) * car.speed;
+
+            // Animate Cockpit Steering wheel
+            const wheelRotationDegree = car.steering * 420;
+            document.getElementById('steeringWheel').style.transform = `rotate(${wheelRotationDegree}deg)`;
+
+            // Blinker ticker sound sync
+            if (car.indicator) {
+                car.indicatorTimer++;
+                if (car.indicatorTimer % 30 === 0) {
+                    playSound('tick');
+                }
+            }
+
+            // Numeric dashboard speed
+            const speedKmh = Math.round(car.speed * 100);
+            document.getElementById('speedValue').innerText = Math.abs(speedKmh);
+
+            updateEnginePitch(Math.abs(car.speed));
+
+            // Lane infraction check (Keep Left Yellow dividing centerline is at X = 0)
+            if (car.position.z > 10 && car.position.x > 0.6) {
+                document.getElementById('dangerAlert').classList.remove('hidden');
+            } else {
+                document.getElementById('dangerAlert').classList.add('hidden');
+            }
+        }
+
+
+        // Align driver's first person camera directly inside the right cabin
+        function update3DCamera() {
+            const rhdOffsetLateral = 0.6; // RHD Position Offset
+            const rhdOffsetVertical = 1.35;
+            const rhdOffsetAhead = 0.25;
+
+            const forwardX = Math.cos(car.angle);
+            const forwardZ = Math.sin(car.angle);
+            
+            const rightX = -forwardZ;
+            const rightZ = forwardX;
+
+            camera.position.set(
+                car.position.x + (rightX * rhdOffsetLateral) + (forwardX * rhdOffsetAhead),
+                rhdOffsetVertical,
+                car.position.z + (rightZ * rhdOffsetLateral) + (forwardZ * rhdOffsetAhead)
+            );
+
+            const lookTargetX = camera.position.x + forwardX * 12;
+            const lookTargetZ = camera.position.z + forwardZ * 12;
+            camera.lookAt(lookTargetX, rhdOffsetVertical - 0.1, lookTargetZ);
+        }
+
+
+        // Safe animation update loop guarding rendering cycles
+        function animateLoop() {
+            requestAnimationFrame(animateLoop);
+
+            if (isInitialized && renderer && scene && camera) {
+                if (isDriving) {
+                    updateDrivingPhysics();
+                    scenarios[currentScenarioIndex].update();
+                }
+                updateTrafficLightEmission();
+                update3DCamera();
+                renderer.render(scene, camera);
+            }
+        }
+
+
+        // DOM Context Initializer
+        document.addEventListener('DOMContentLoaded', () => {
+            initAudio();
+            setupControls();
+
+            const actionBtn = document.getElementById('modalActionBtn');
+            actionBtn.onclick = () => {
+                if (init3D()) {
+                    loadScenario(0);
+                    animateLoop();
+                } else {
+                    document.getElementById('modalDesc').innerText = "⚠️ 瀏覽器不支援 WebGL 渲染，請開啟硬體加速。";
+                }
+            };
+        });
+
+
+        window.addEventListener('resize', () => {
+            if (renderer && camera) {
+                const container = document.getElementById('canvasContainer');
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            }
+        });
+    </script>
+</body>
+</html>
