@@ -14,6 +14,49 @@
             0% { opacity: 0.2; }
             100% { opacity: 1; filter: drop-shadow(0 0 8px currentColor); }
         }
+
+        /* === Mobile Touch Controls === */
+        #mobileControls { display: none; }
+        .mobile-ctrl-btn {
+            width: 62px; height: 62px;
+            border-radius: 50%;
+            font-size: 16px; font-weight: 700;
+            border: 2px solid rgba(255,255,255,0.15);
+            background: rgba(15, 23, 42, 0.88);
+            color: #e2e8f0;
+            display: flex; align-items: center; justify-content: center;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            transition: transform 0.05s, opacity 0.05s;
+            backdrop-filter: blur(8px);
+        }
+        .mobile-ctrl-btn:active { transform: scale(0.88); opacity: 0.7; }
+        #mobileBrakeBtn  { background: rgba(220, 38, 38, 0.85); color: #fff; border-color: rgba(251, 146, 146, 0.4); font-size: 13px; }
+        #mobileAccelBtn  { background: rgba(16, 185, 129, 0.85); color: #fff; border-color: rgba(110, 231, 183, 0.4); font-size: 13px; }
+
+        @media (max-width: 768px) {
+            #mobileControls { display: flex; }
+
+            /* Compact HUD */
+            #hudInstruction { font-size: 11px !important; padding: 6px 10px !important; min-height: auto !important; }
+
+            /* Compact cockpit */
+            #steeringWheel { width: 100px !important; height: 100px !important; }
+            #speedValue { font-size: 1.5rem !important; }
+
+            /* Hide keyboard hint section on mobile */
+            #keyboardHints { display: none !important; }
+
+            /* Make indicator buttons larger for touch */
+            #leftIndicatorBtn, #rightIndicatorBtn { padding: 14px !important; }
+            #leftIndicatorBtn svg, #rightIndicatorBtn svg { width: 1.5rem !important; height: 1.5rem !important; }
+
+            /* Hide "牢記" reminder text on mobile */
+            .max-w-5xl .mt-4.bg-amber-500 { display: none !important; }
+        }
     </style>
 </head>
 <body class="text-slate-100 select-none">
@@ -124,7 +167,7 @@
                     <div class="h-12 w-px bg-slate-700"></div>
 
                     <!-- Keyboard bindings helper -->
-                    <div class="flex flex-col gap-1 text-[11px] text-slate-400">
+                    <div id="keyboardHints" class="flex flex-col gap-1 text-[11px] text-slate-400">
                         <div class="flex gap-1"><kbd class="bg-slate-800 px-1 py-0.5 rounded text-slate-200">↑ / W</kbd> 加速</div>
                         <div class="flex gap-1"><kbd class="bg-slate-800 px-1 py-0.5 rounded text-slate-200">Space</kbd> 煞車不倒車</div>
                         <div class="flex gap-1"><kbd class="bg-slate-800 px-1 py-0.5 rounded text-slate-200">← →</kbd> 方向盤</div>
@@ -154,6 +197,20 @@
                 <button id="modalActionBtn" class="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold py-3.5 px-6 rounded-2xl transition shadow-lg shadow-cyan-500/20 active:scale-95">
                     開始挑戰 🚀
                 </button>
+            </div>
+        </div>
+
+        <!-- Mobile Touch Controls (hidden on desktop) -->
+        <div id="mobileControls" class="absolute inset-x-0 flex justify-between items-end px-4 pointer-events-none z-30" style="bottom: 15px;">
+            <!-- Left: Steering D-Pad -->
+            <div class="pointer-events-auto flex gap-2">
+                <button id="mobileSteerLeft" class="mobile-ctrl-btn">◀</button>
+                <button id="mobileSteerRight" class="mobile-ctrl-btn">▶</button>
+            </div>
+            <!-- Right: Brake + Accelerate -->
+            <div class="pointer-events-auto flex gap-2">
+                <button id="mobileBrakeBtn" class="mobile-ctrl-btn">煞</button>
+                <button id="mobileAccelBtn" class="mobile-ctrl-btn">油</button>
             </div>
         </div>
     </div>
@@ -1087,6 +1144,34 @@
                 brakeBtn.addEventListener('touchstart', pressBrake);
                 brakeBtn.addEventListener('touchend', releaseBrake);
             }
+
+            // Mobile touch control bindings
+            function bindMobileButton(id, keyName) {
+                const btn = document.getElementById(id);
+                if (!btn) return;
+
+                const press = (e) => {
+                    e.preventDefault();
+                    keys[keyName] = true;
+                    startEngineHum();
+                };
+                const release = (e) => {
+                    e.preventDefault();
+                    keys[keyName] = false;
+                };
+
+                btn.addEventListener('touchstart', press, {passive: false});
+                btn.addEventListener('touchend', release);
+                btn.addEventListener('touchcancel', release);
+                btn.addEventListener('mousedown', press);
+                btn.addEventListener('mouseup', release);
+                btn.addEventListener('mouseleave', release);
+            }
+
+            bindMobileButton('mobileSteerLeft', 'ArrowLeft');
+            bindMobileButton('mobileSteerRight', 'ArrowRight');
+            bindMobileButton('mobileAccelBtn', 'ArrowUp');
+            bindMobileButton('mobileBrakeBtn', ' ');
         }
 
 
