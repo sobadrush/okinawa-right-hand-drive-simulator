@@ -38,24 +38,37 @@
         #mobileAccelBtn  { background: rgba(16, 185, 129, 0.85); color: #fff; border-color: rgba(110, 231, 183, 0.4); font-size: 13px; }
 
         @media (max-width: 768px) {
-            #mobileControls { display: flex; }
+            /* === Mobile Touch Controls — above cockpit === */
+            #mobileControls {
+                display: flex;
+                bottom: 100px !important;
+            }
 
-            /* Compact HUD */
+            /* === Compact HUD === */
             #hudInstruction { font-size: 11px !important; padding: 6px 10px !important; min-height: auto !important; }
 
-            /* Compact cockpit */
-            #steeringWheel { width: 100px !important; height: 100px !important; }
-            #speedValue { font-size: 1.5rem !important; }
+            /* === Steering Wheel Fix — remove negative margin, non-interactive === */
+            #steeringWheelContainer {
+                margin-bottom: 0 !important;
+                pointer-events: none !important;
+            }
+            #steeringWheel { width: 80px !important; height: 80px !important; }
 
-            /* Hide keyboard hint section on mobile */
-            #keyboardHints { display: none !important; }
+            /* === Compact Cockpit Layout === */
+            #dashboardGrid { padding-left: 6px !important; padding-right: 6px !important; padding-bottom: 10px !important; }
+            #cockpitLeftPanel  { padding: 8px !important; gap: 8px !important; }
+            #cockpitRightPanel { padding: 8px !important; gap: 8px !important; }
+            #speedValue { font-size: 1.25rem !important; }
+            #leftIndicatorBtn, #rightIndicatorBtn { padding: 8px !important; }
+            #leftIndicatorBtn svg, #rightIndicatorBtn svg { width: 1.25rem !important; height: 1.25rem !important; }
 
-            /* Make indicator buttons larger for touch */
-            #leftIndicatorBtn, #rightIndicatorBtn { padding: 14px !important; }
-            #leftIndicatorBtn svg, #rightIndicatorBtn svg { width: 1.5rem !important; height: 1.5rem !important; }
+            /* === Hide Desktop-Only Elements === */
+            #virtualBrakeBtn { display: none !important; }
+            #keyboardHints   { display: none !important; }
+            #cockpitRightPanel .h-12.w-px { display: none !important; }
 
-            /* Hide "牢記" reminder text on mobile */
-            .max-w-5xl .mt-4.bg-amber-500 { display: none !important; }
+            /* === Hide "牢記" Reminder Text === */
+            #steeringWheelContainer .mt-4 { display: none !important; }
         }
     </style>
 </head>
@@ -115,10 +128,10 @@
         <!-- Cockpit Dashboard Overlay (RHD Perspective) -->
         <div class="absolute inset-x-0 bottom-0 pointer-events-none flex flex-col items-center">
             <!-- Dashboard Grid -->
-            <div class="relative w-full max-w-5xl flex justify-between items-end px-12 pb-6">
+            <div id="dashboardGrid" class="relative w-full max-w-5xl flex justify-between items-end px-12 pb-6">
                 
                 <!-- Left Control: Indicator Lights & Speedometer -->
-                <div class="bg-slate-900/90 border border-slate-700/50 backdrop-blur-md p-4 rounded-2xl shadow-2xl flex items-center gap-6 pointer-events-auto">
+                <div id="cockpitLeftPanel" class="bg-slate-900/90 border border-slate-700/50 backdrop-blur-md p-4 rounded-2xl shadow-2xl flex items-center gap-6 pointer-events-auto">
                     <!-- Numeric Speed display -->
                     <div class="flex flex-col items-center">
                         <span class="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Speed</span>
@@ -140,7 +153,7 @@
                 </div>
 
                 <!-- Center: Animated 3D Steering Wheel representation -->
-                <div class="relative -mb-16 pointer-events-auto select-none flex flex-col items-center">
+                <div id="steeringWheelContainer" class="relative -mb-16 pointer-events-auto select-none flex flex-col items-center">
                     <div id="steeringWheel" class="w-64 h-64 transition-transform duration-75 ease-out" style="transform: rotate(0deg)">
                         <svg viewBox="0 0 200 200" class="w-full h-full drop-shadow-[0_15px_15px_rgba(0,0,0,0.6)]">
                             <circle cx="100" cy="100" r="85" fill="none" stroke="#1e293b" stroke-width="18"/>
@@ -157,7 +170,7 @@
                 </div>
 
                 <!-- Right Control: Virtual Brake Pedal, Keys & Score -->
-                <div class="bg-slate-900/90 border border-slate-700/50 backdrop-blur-md p-4 rounded-2xl shadow-2xl flex items-center gap-4 pointer-events-auto">
+                <div id="cockpitRightPanel" class="bg-slate-900/90 border border-slate-700/50 backdrop-blur-md p-4 rounded-2xl shadow-2xl flex items-center gap-4 pointer-events-auto">
                     <!-- Physical Brake button for clickers -->
                     <button id="virtualBrakeBtn" class="bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold px-4 py-3 rounded-xl transition border border-rose-500/30 flex flex-col items-center justify-center min-w-[80px] shadow-lg shadow-rose-600/20">
                         <span class="text-[9px] uppercase tracking-wider opacity-80 font-mono">Brake</span>
