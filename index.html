@@ -136,7 +136,8 @@
                     <div class="flex flex-col items-center">
                         <span class="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Speed</span>
                         <div class="flex items-baseline gap-1 mt-1">
-                            <span id="speedValue" class="text-4xl font-black font-mono text-cyan-400">0</span>
+                            <!-- 固定寬度避免位數變化擠壓中央方向盤造成左右彈跳 -->
+                            <span id="speedValue" class="text-4xl font-black font-mono text-cyan-400 text-right" style="display:inline-block; min-width:2.4ch; font-variant-numeric:tabular-nums;">0</span>
                             <span class="text-xs text-slate-400">km/h</span>
                         </div>
                     </div>
@@ -245,8 +246,8 @@
             position: new THREE.Vector3(-4, 1.2, 60),
             angle: -Math.PI / 2,
             speed: 0,
-            maxSpeed: 0.8,
-            acceleration: 0.008,
+            maxSpeed: 0.5,
+            acceleration: 0.004,
             deceleration: 0.02,
             steering: 0,
             indicator: null,
@@ -930,6 +931,40 @@
         }
 
 
+        // 產生附加號誌的方向箭頭貼圖（白色箭頭、透明底），由材質 color 染色控制亮/暗
+        function createArrowTexture(dir) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, 128, 128);
+
+            ctx.translate(64, 64);
+            // 以「向右」為基準繪製，再依方向旋轉（canvas y 向下，順時針為正）
+            if (dir === 'left') ctx.rotate(Math.PI);
+            else if (dir === 'forward') ctx.rotate(-Math.PI / 2); // 向上
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 18;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            // 箭身
+            ctx.beginPath();
+            ctx.moveTo(-34, 0);
+            ctx.lineTo(26, 0);
+            ctx.stroke();
+            // 箭頭
+            ctx.beginPath();
+            ctx.moveTo(4, -26);
+            ctx.lineTo(34, 0);
+            ctx.lineTo(4, 26);
+            ctx.stroke();
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+
         // Build full 3D Traffic Light with arrow indicators below
         let lightsMeshGroup = {};
         function createTrafficLights() {
@@ -980,19 +1015,21 @@
             group.add(greenLens);
             lightsMeshGroup['green'] = greenLens;
 
-            // Downward green arrow lenses
-            const leftArrowLens = new THREE.Mesh(lensGeo, new THREE.MeshBasicMaterial({ color: 0x001a00 }));
-            leftArrowLens.position.set(-7, 7.8, 0.95);
+            // Downward green arrow lenses（平面 + 箭頭貼圖，UV 方向可預期；color 控制亮/暗染色）
+            const arrowGeo = new THREE.PlaneGeometry(0.7, 0.7);
+
+            const leftArrowLens = new THREE.Mesh(arrowGeo, new THREE.MeshBasicMaterial({ map: createArrowTexture('left'), transparent: true, color: 0x001a00 }));
+            leftArrowLens.position.set(-7, 7.8, 0.96);
             group.add(leftArrowLens);
             lightsMeshGroup['leftArrow'] = leftArrowLens;
 
-            const forwardArrowLens = new THREE.Mesh(lensGeo, new THREE.MeshBasicMaterial({ color: 0x001a00 }));
-            forwardArrowLens.position.set(-6, 7.8, 0.95);
+            const forwardArrowLens = new THREE.Mesh(arrowGeo, new THREE.MeshBasicMaterial({ map: createArrowTexture('forward'), transparent: true, color: 0x001a00 }));
+            forwardArrowLens.position.set(-6, 7.8, 0.96);
             group.add(forwardArrowLens);
             lightsMeshGroup['forwardArrow'] = forwardArrowLens;
 
-            const rightArrowLens = new THREE.Mesh(lensGeo, new THREE.MeshBasicMaterial({ color: 0x001a00 }));
-            rightArrowLens.position.set(-5, 7.8, 0.95);
+            const rightArrowLens = new THREE.Mesh(arrowGeo, new THREE.MeshBasicMaterial({ map: createArrowTexture('right'), transparent: true, color: 0x001a00 }));
+            rightArrowLens.position.set(-5, 7.8, 0.96);
             group.add(rightArrowLens);
             lightsMeshGroup['rightArrow'] = rightArrowLens;
 
@@ -1314,8 +1351,12 @@
 
             // Spacebar / Custom Brake button (strictly brakes without reverse)
             if (keys[' ']) {
-                targetAcceleration = -car.deceleration;
-                car.speed += targetAcceleration;
+                // 僅將速度往 0 收斂，不可越過 0 變成倒車
+                if (car.speed > 0) {
+                    car.speed = Math.max(0, car.speed - car.deceleration);
+                } else if (car.speed < 0) {
+                    car.speed = Math.min(0, car.speed + car.deceleration);
+                }
                 car.speed *= 0.90; // High friction active deceleration
                 if (Math.abs(car.speed) < 0.01) {
                     car.speed = 0;
