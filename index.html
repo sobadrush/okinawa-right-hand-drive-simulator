@@ -59,48 +59,52 @@
         #guidanceToggleBtn.guide-off { opacity: 0.4; }
 
         @media (max-width: 768px) {
-            /* === Mobile Touch Controls — above cockpit === */
+            /* ============================================================
+               手機版底部採「兩層垂直疊放」，皆貼齊安全區，互不重疊：
+                 第 2 層（最下）：觸控按鈕 ◀ ▶ ／ 煞 油
+                 第 1 層（其上）：精簡資訊條 速度｜方向燈｜分數｜導引線
+               ============================================================ */
+
+            /* --- 第 2 層：觸控按鈕，貼安全區底部 --- */
             #mobileControls {
                 display: flex;
-                bottom: 100px !important;
+                bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
             }
+            .mobile-ctrl-btn { width: 58px; height: 58px; }
+
+            /* --- 第 1 層：精簡資訊條，抬到觸控按鈕上方 --- */
+            #dashboardGrid {
+                justify-content: center !important;
+                align-items: center !important;
+                gap: 10px !important;
+                padding: 0 8px !important;
+                margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 84px) !important;
+            }
+            #cockpitLeftPanel  { padding: 6px 10px !important; gap: 10px !important; }
+            #cockpitRightPanel { padding: 6px 10px !important; gap: 10px !important; }
+            #speedValue { font-size: 1.4rem !important; }
+            #gameScore  { font-size: 1.4rem !important; margin-top: 0 !important; }
+            #leftIndicatorBtn, #rightIndicatorBtn { padding: 7px !important; }
+            #leftIndicatorBtn svg, #rightIndicatorBtn svg { width: 1.15rem !important; height: 1.15rem !important; }
+            #guidanceToggleBtn { font-size: 10px; padding: 5px 8px; }
+
+            /* --- 手機隱藏：方向盤（觸控鈕已替代）、桌機專屬元件 --- */
+            #steeringWheelContainer { display: none !important; }
+            #virtualBrakeBtn { display: none !important; }
+            #keyboardHints   { display: none !important; }
+            #cockpitRightPanel .h-12.w-px { display: none !important; }
+            .mobile-hide-divider { display: none !important; }
 
             /* === 手機頂部 HUD 收合：關卡說明和進度條預設隱藏 === */
             #scenarioDetails { display: none; }
             #infoToggleBtn   { display: flex !important; }
 
             /* === 頂部 HUD 區域縮小，減少遮擋號誌 === */
-            #hudTopArea { top: 4px !important; gap: 2px !important; }
-            #scenarioCard { padding: 5px 8px !important; gap: 2px !important; }
-            #scenarioTitle { font-size: 0.8rem !important; }
+            #hudTopArea { top: 4px !important; gap: 4px !important; }
+            #scenarioCard { padding: 6px 10px !important; gap: 4px !important; }
+            #scenarioTitle { font-size: 0.85rem !important; }
             #stageProgress { display: none !important; }
-
-            /* === Compact HUD instruction bar === */
             #hudInstruction { font-size: 10px !important; padding: 4px 8px !important; min-height: 26px !important; }
-
-            /* === Steering Wheel Fix — remove negative margin, non-interactive === */
-            #steeringWheelContainer {
-                margin-bottom: 0 !important;
-                pointer-events: none !important;
-            }
-            #steeringWheel { width: 80px !important; height: 80px !important; }
-
-            /* === Compact Cockpit Layout === */
-            #dashboardGrid { padding-left: 6px !important; padding-right: 6px !important; padding-bottom: 10px !important; }
-            #cockpitLeftPanel  { padding: 8px !important; gap: 8px !important; }
-            #cockpitRightPanel { padding: 8px !important; gap: 6px !important; }
-            #speedValue { font-size: 1.25rem !important; }
-            #leftIndicatorBtn, #rightIndicatorBtn { padding: 8px !important; }
-            #leftIndicatorBtn svg, #rightIndicatorBtn svg { width: 1.25rem !important; height: 1.25rem !important; }
-
-            /* === Hide Desktop-Only Elements === */
-            #virtualBrakeBtn { display: none !important; }
-            #keyboardHints   { display: none !important; }
-            #cockpitRightPanel .h-12.w-px { display: none !important; }
-            .mobile-hide-divider { display: none !important; }
-
-            /* === Hide "牢記" Reminder Text === */
-            #steeringWheelContainer .mt-4 { display: none !important; }
 
             /* === 手機隱藏關卡選擇 label === */
             #levelSelectLabel { display: none !important; }
@@ -237,8 +241,8 @@
 
                     <div class="h-12 w-px bg-slate-700 mobile-hide-divider"></div>
 
-                    <!-- 導引線切換按鈕 -->
-                    <button id="guidanceToggleBtn" onclick="toggleGuidanceLine()" title="切換地面導引線">
+                    <!-- 導引線切換按鈕（預設關閉，顯示為暗色）-->
+                    <button id="guidanceToggleBtn" class="guide-off" onclick="toggleGuidanceLine()" title="切換地面導引線">
                         🗺️ 導引線
                     </button>
                 </div>
@@ -1199,6 +1203,8 @@
                 }
             });
 
+            // 沿用目前的導引線顯示狀態（預設關閉）
+            guidanceGroup.visible = guidanceVisible;
             scene.add(guidanceGroup);
         }
 
@@ -1282,8 +1288,8 @@
             btn.textContent = isVisible ? 'ℹ️' : '✕';
         }
 
-        // 導引線顯示切換
-        let guidanceVisible = true;
+        // 導引線顯示切換（預設關閉）
+        let guidanceVisible = false;
         function toggleGuidanceLine() {
             guidanceVisible = !guidanceVisible;
             if (guidanceGroup) guidanceGroup.visible = guidanceVisible;
