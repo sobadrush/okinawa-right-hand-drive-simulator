@@ -37,6 +37,27 @@
         #mobileBrakeBtn  { background: rgba(220, 38, 38, 0.85); color: #fff; border-color: rgba(251, 146, 146, 0.4); font-size: 13px; }
         #mobileAccelBtn  { background: rgba(16, 185, 129, 0.85); color: #fff; border-color: rgba(110, 231, 183, 0.4); font-size: 13px; }
 
+        /* === Info Toggle Button（桌機隱藏，手機才顯示）=== */
+        #infoToggleBtn { display: none; }
+
+        /* === Guidance Toggle Button === */
+        #guidanceToggleBtn {
+            background: rgba(15,23,42,0.9);
+            border: 1px solid rgba(100,116,139,0.5);
+            color: #94a3b8;
+            border-radius: 10px;
+            padding: 6px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: opacity 0.2s, background 0.2s;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        #guidanceToggleBtn:active { transform: scale(0.94); }
+        #guidanceToggleBtn.guide-off { opacity: 0.4; }
+
         @media (max-width: 768px) {
             /* === Mobile Touch Controls — above cockpit === */
             #mobileControls {
@@ -44,8 +65,18 @@
                 bottom: 100px !important;
             }
 
-            /* === Compact HUD === */
-            #hudInstruction { font-size: 11px !important; padding: 6px 10px !important; min-height: auto !important; }
+            /* === 手機頂部 HUD 收合：關卡說明和進度條預設隱藏 === */
+            #scenarioDetails { display: none; }
+            #infoToggleBtn   { display: flex !important; }
+
+            /* === 頂部 HUD 區域縮小，減少遮擋號誌 === */
+            #hudTopArea { top: 4px !important; gap: 2px !important; }
+            #scenarioCard { padding: 5px 8px !important; gap: 2px !important; }
+            #scenarioTitle { font-size: 0.8rem !important; }
+            #stageProgress { display: none !important; }
+
+            /* === Compact HUD instruction bar === */
+            #hudInstruction { font-size: 10px !important; padding: 4px 8px !important; min-height: 26px !important; }
 
             /* === Steering Wheel Fix — remove negative margin, non-interactive === */
             #steeringWheelContainer {
@@ -57,7 +88,7 @@
             /* === Compact Cockpit Layout === */
             #dashboardGrid { padding-left: 6px !important; padding-right: 6px !important; padding-bottom: 10px !important; }
             #cockpitLeftPanel  { padding: 8px !important; gap: 8px !important; }
-            #cockpitRightPanel { padding: 8px !important; gap: 8px !important; }
+            #cockpitRightPanel { padding: 8px !important; gap: 6px !important; }
             #speedValue { font-size: 1.25rem !important; }
             #leftIndicatorBtn, #rightIndicatorBtn { padding: 8px !important; }
             #leftIndicatorBtn svg, #rightIndicatorBtn svg { width: 1.25rem !important; height: 1.25rem !important; }
@@ -66,9 +97,13 @@
             #virtualBrakeBtn { display: none !important; }
             #keyboardHints   { display: none !important; }
             #cockpitRightPanel .h-12.w-px { display: none !important; }
+            .mobile-hide-divider { display: none !important; }
 
             /* === Hide "牢記" Reminder Text === */
             #steeringWheelContainer .mt-4 { display: none !important; }
+
+            /* === 手機隱藏關卡選擇 label === */
+            #levelSelectLabel { display: none !important; }
         }
     </style>
 </head>
@@ -80,18 +115,22 @@
         <canvas id="drivingCanvas" class="w-full h-full"></canvas>
 
         <!-- Windshield HUD & Notifications -->
-        <div class="absolute inset-x-0 top-6 flex flex-col items-center pointer-events-none px-4 gap-3">
+        <div id="hudTopArea" class="absolute inset-x-0 top-6 flex flex-col items-center pointer-events-none px-4 gap-3">
             <!-- Stage Selector & Control Card -->
-            <div class="bg-slate-900/95 border border-cyan-500/30 backdrop-blur-md rounded-2xl p-4 max-w-2xl w-full shadow-2xl flex flex-col gap-3 pointer-events-auto">
+            <div id="scenarioCard" class="bg-slate-900/95 border border-cyan-500/30 backdrop-blur-md rounded-2xl p-4 max-w-2xl w-full shadow-2xl flex flex-col gap-3 pointer-events-auto">
                 <div class="flex justify-between items-center flex-wrap gap-2">
                     <div class="flex items-center gap-2">
                         <span id="scenarioTitle" class="text-cyan-400 font-bold text-lg">載入中...</span>
                         <span id="stageProgress" class="bg-cyan-500/10 text-cyan-400 text-xs px-2.5 py-1 rounded-full font-mono border border-cyan-500/20">關卡 1/9</span>
+                        <!-- 手機版：展開/收合說明按鈕 -->
+                        <button id="infoToggleBtn" onclick="toggleScenarioDetails()"
+                            class="text-slate-400 hover:text-cyan-400 transition text-base leading-none px-1"
+                            title="展開關卡說明">ℹ️</button>
                     </div>
-                    
+
                     <!-- Level Dropdown Selector -->
                     <div class="flex items-center gap-2">
-                        <label for="levelSelect" class="text-xs text-slate-400 font-semibold">選擇練習：</label>
+                        <label id="levelSelectLabel" for="levelSelect" class="text-xs text-slate-400 font-semibold">選擇練習：</label>
                         <select id="levelSelect" onchange="selectScenario(this.value)" class="bg-slate-800 border border-slate-700 rounded-lg text-xs text-cyan-300 py-1.5 px-2.5 outline-none focus:border-cyan-500 font-semibold font-mono">
                             <option value="0">1. 左轉小彎與靠左行駛</option>
                             <option value="1">2. 右轉大彎與禮讓對向</option>
@@ -105,12 +144,14 @@
                         </select>
                     </div>
                 </div>
-                
-                <p id="scenarioDescription" class="text-sm text-slate-300">請稍候，系統初始化中...</p>
-                
-                <!-- Progress Line -->
-                <div class="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                    <div id="scenarioProgress" class="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300" style="width: 11%"></div>
+
+                <!-- 說明 + 進度條（手機預設隱藏，點 ℹ️ 展開）-->
+                <div id="scenarioDetails">
+                    <p id="scenarioDescription" class="text-sm text-slate-300 mb-3">請稍候，系統初始化中...</p>
+                    <!-- Progress Line -->
+                    <div class="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                        <div id="scenarioProgress" class="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300" style="width: 11%"></div>
+                    </div>
                 </div>
             </div>
 
@@ -193,6 +234,13 @@
                         <span class="text-xs text-slate-400 uppercase tracking-widest font-semibold">安全分</span>
                         <div id="gameScore" class="text-3xl font-black font-mono text-emerald-400 mt-1">100</div>
                     </div>
+
+                    <div class="h-12 w-px bg-slate-700 mobile-hide-divider"></div>
+
+                    <!-- 導引線切換按鈕 -->
+                    <button id="guidanceToggleBtn" onclick="toggleGuidanceLine()" title="切換地面導引線">
+                        🗺️ 導引線
+                    </button>
                 </div>
 
             </div>
@@ -1224,6 +1272,24 @@
             bindMobileButton('mobileBrakeBtn', ' ');
         }
 
+
+        // 手機版：展開/收合關卡說明面板
+        function toggleScenarioDetails() {
+            const details = document.getElementById('scenarioDetails');
+            const btn = document.getElementById('infoToggleBtn');
+            const isVisible = details.style.display === 'block';
+            details.style.display = isVisible ? 'none' : 'block';
+            btn.textContent = isVisible ? 'ℹ️' : '✕';
+        }
+
+        // 導引線顯示切換
+        let guidanceVisible = true;
+        function toggleGuidanceLine() {
+            guidanceVisible = !guidanceVisible;
+            if (guidanceGroup) guidanceGroup.visible = guidanceVisible;
+            const btn = document.getElementById('guidanceToggleBtn');
+            if (btn) btn.classList.toggle('guide-off', !guidanceVisible);
+        }
 
         // Toggle cockpit indicators
         function toggleIndicator(side) {
