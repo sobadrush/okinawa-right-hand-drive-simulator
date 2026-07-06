@@ -1048,8 +1048,8 @@
             playerHood = createPlayerHood();
             scene.add(playerHood);
 
-            // 第三人稱視角用的玩家車體（預設隱藏）
-            playerCarMesh = createNpcCar(0xf1f5f9);
+            // 第三人稱視角用的玩家車體：低多邊形 Audi R8 造型（預設隱藏）
+            playerCarMesh = createR8Car(0xf1f5f9);
             playerCarMesh.visible = false;
             scene.add(playerCarMesh);
 
@@ -1101,6 +1101,127 @@
             hood.position.set(0, 0.92, 1.72);
             hood.rotation.x = 0.04; // 前緣略下斜
             group.add(hood);
+
+            return group;
+        }
+
+
+        // 低多邊形 Audi R8 造型玩家車（車外視角用），面向 +Z 行進方向
+        // 全程式化幾何：側面輪廓擠出車身 + 細節件，風格貼合場景、無外部模型資源
+        function createR8Car(bodyColorHex) {
+            const group = new THREE.Group();
+            const paintMat = new THREE.MeshStandardMaterial({ color: bodyColorHex, roughness: 0.3, metalness: 0.45 });
+            const darkMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.85 });
+            const glassMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.1, metalness: 0.7 });
+            const bladeMat = new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.5, metalness: 0.4 });
+
+            // 側面輪廓（shape x = 車長方向，+x 車頭；y = 高度）：低扁楔形 + 斜背
+            const profile = new THREE.Shape();
+            profile.moveTo(2.2, 0.2);    // 車頭下緣
+            profile.lineTo(2.2, 0.5);    // 低鼻頭
+            profile.lineTo(1.15, 0.66);  // 引擎蓋緩升
+            profile.lineTo(0.5, 0.7);    // 擋風玻璃基部
+            profile.lineTo(-0.15, 1.12); // 座艙頂前緣（大斜度 A 柱）
+            profile.lineTo(-0.85, 1.08); // 車頂後緣
+            profile.lineTo(-1.95, 0.74); // 斜背（fastback）
+            profile.lineTo(-2.2, 0.72);  // 車尾上緣
+            profile.lineTo(-2.2, 0.26);  // 車尾下緣
+            profile.lineTo(2.2, 0.2);    // 平坦車底
+            const bodyGeo = new THREE.ExtrudeGeometry(profile, { depth: 1.9, bevelEnabled: false });
+            const body = new THREE.Mesh(bodyGeo, paintMat);
+            // 擠出沿 z：旋轉使輪廓 +x 對齊 local +z（車頭）；旋轉後擠出深度朝 local -x，故 +0.95 置中
+            body.rotation.y = -Math.PI / 2;
+            body.position.x = 0.95;
+            body.castShadow = true;
+            group.add(body);
+
+            // 座艙玻璃帶（略寬於車身，形成黑色環繞座艙）
+            const glass = new THREE.Mesh(new THREE.BoxGeometry(1.94, 0.34, 1.15), glassMat);
+            glass.position.set(0, 0.86, -0.42);
+            group.add(glass);
+            const windshield = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.62), glassMat);
+            windshield.position.set(0, 0.9, 0.24);
+            windshield.rotation.x = -0.57; // 大斜度前擋
+            group.add(windshield);
+
+            // 前格柵（R8 大六角單框）與兩側進氣口
+            const grille = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.3, 0.08), darkMat);
+            grille.position.set(0, 0.38, 2.18);
+            group.add(grille);
+            [-0.75, 0.75].forEach((gx) => {
+                const intake = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.22, 0.08), darkMat);
+                intake.position.set(gx, 0.36, 2.18);
+                group.add(intake);
+            });
+
+            // LED 頭燈（白色薄片 + 冷白日行燈條）
+            const headlightMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
+            const drlMat = new THREE.MeshBasicMaterial({ color: 0xbfdbfe });
+            [-0.72, 0.72].forEach((hx) => {
+                const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.06), headlightMat);
+                lamp.position.set(hx, 0.58, 2.2);
+                group.add(lamp);
+                const drl = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.03, 0.06), drlMat);
+                drl.position.set(hx, 0.51, 2.21);
+                group.add(drl);
+            });
+
+            // 尾燈（紅色細條）與尾翼唇
+            const tailMat = new THREE.MeshBasicMaterial({ color: 0xdc2626 });
+            [-0.66, 0.66].forEach((tx) => {
+                const tail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.05), tailMat);
+                tail.position.set(tx, 0.62, -2.22);
+                group.add(tail);
+            });
+            const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.05, 0.28), paintMat);
+            spoiler.position.set(0, 0.76, -2.1);
+            group.add(spoiler);
+
+            // 側刃 side blade（R8 標誌性深色飾板，座艙後方兩側）
+            [-0.97, 0.97].forEach((sx) => {
+                const blade = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.5, 0.82), bladeMat);
+                blade.position.set(sx, 0.6, -0.95);
+                group.add(blade);
+            });
+
+            // 後視鏡
+            [-1.02, 1.02].forEach((mx) => {
+                const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.14), paintMat);
+                mirror.position.set(mx, 0.82, 0.55);
+                group.add(mirror);
+            });
+
+            // 四出排氣（尾部下方兩對深色圓管）
+            const exhaustGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.12, 8);
+            exhaustGeo.rotateX(Math.PI / 2);
+            [-0.55, -0.35, 0.35, 0.55].forEach((ex) => {
+                const pipe = new THREE.Mesh(exhaustGeo, darkMat);
+                pipe.position.set(ex, 0.3, -2.24);
+                group.add(pipe);
+            });
+
+            // 車輪：胎 + 銀色輪圈盤
+            const tireGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.3, 14);
+            tireGeo.rotateZ(Math.PI / 2);
+            const rimGeo = new THREE.CylinderGeometry(0.21, 0.21, 0.32, 10);
+            rimGeo.rotateZ(Math.PI / 2);
+            const rimMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.25, metalness: 0.8 });
+            [[-0.93, 1.35], [0.93, 1.35], [-0.93, -1.3], [0.93, -1.3]].forEach(([wx, wz]) => {
+                const tire = new THREE.Mesh(tireGeo, darkMat);
+                tire.position.set(wx, 0.36, wz);
+                group.add(tire);
+                const rim = new THREE.Mesh(rimGeo, rimMat);
+                rim.position.set(wx, 0.36, wz);
+                group.add(rim);
+            });
+
+            // 前下擾流與後分流器（深色，增加貼地感）
+            const splitter = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.1, 0.16), darkMat);
+            splitter.position.set(0, 0.16, 2.14);
+            group.add(splitter);
+            const diffuser = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 0.12), darkMat);
+            diffuser.position.set(0, 0.18, -2.18);
+            group.add(diffuser);
 
             return group;
         }
