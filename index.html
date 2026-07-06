@@ -36,6 +36,7 @@
         .mobile-ctrl-btn:active { transform: scale(0.88); opacity: 0.7; }
         #mobileBrakeBtn  { background: rgba(220, 38, 38, 0.85); color: #fff; border-color: rgba(251, 146, 146, 0.4); font-size: 13px; }
         #mobileAccelBtn  { background: rgba(16, 185, 129, 0.85); color: #fff; border-color: rgba(110, 231, 183, 0.4); font-size: 13px; }
+        #mobileReverseBtn { background: rgba(217, 119, 6, 0.8); color: #fff; border-color: rgba(252, 211, 77, 0.4); font-size: 13px; }
 
         /* === Info Toggle Button（桌機隱藏，手機才顯示）=== */
         #infoToggleBtn { display: none; }
@@ -58,7 +59,9 @@
         #guidanceToggleBtn:active, #cameraToggleBtn:active { transform: scale(0.94); }
         #guidanceToggleBtn.guide-off { opacity: 0.4; }
 
-        @media (max-width: 768px) {
+        /* 純觸控裝置（手機橫向、平板）即使寬度 > 768px 也套用觸控佈局，
+           否則橫向手機會落入桌機版、觸控按鈕全數消失而無法駕駛 */
+        @media (max-width: 768px), ((hover: none) and (pointer: coarse)) {
             /* ============================================================
                手機版底部採「兩層垂直疊放」，皆貼齊安全區，互不重疊：
                  第 2 層（最下）：觸控按鈕 ◀ ▶ ／ 煞 油
@@ -111,6 +114,15 @@
 
             /* === 手機隱藏限速標誌（避免擠壓精簡資訊條）=== */
             #speedLimitSign { display: none !important; }
+        }
+
+        /* === 窄螢幕（<375px）進一步壓縮，避免視角切換鈕被裁出畫面右緣 === */
+        @media (max-width: 374px) {
+            #dashboardGrid { gap: 6px !important; padding: 0 4px !important; }
+            #cockpitLeftPanel, #cockpitRightPanel { padding: 5px 6px !important; gap: 6px !important; }
+            #guidanceToggleBtn, #cameraToggleBtn { font-size: 9px; padding: 4px 5px; }
+            #speedValue, #gameScore { font-size: 1.15rem !important; }
+            .mobile-ctrl-btn { width: 50px !important; height: 50px !important; }
         }
     </style>
 </head>
@@ -294,8 +306,9 @@
                 <button id="mobileSteerLeft" class="mobile-ctrl-btn">◀</button>
                 <button id="mobileSteerRight" class="mobile-ctrl-btn">▶</button>
             </div>
-            <!-- Right: Brake + Accelerate -->
+            <!-- Right: Reverse + Brake + Accelerate（倒車對應鍵盤 ↓/S，補齊 web 版功能）-->
             <div class="pointer-events-auto flex gap-2">
+                <button id="mobileReverseBtn" class="mobile-ctrl-btn">倒</button>
                 <button id="mobileBrakeBtn" class="mobile-ctrl-btn">煞</button>
                 <button id="mobileAccelBtn" class="mobile-ctrl-btn">油</button>
             </div>
@@ -1821,6 +1834,7 @@
             bindMobileButton('mobileSteerRight', 'ArrowRight');
             bindMobileButton('mobileAccelBtn', 'ArrowUp');
             bindMobileButton('mobileBrakeBtn', ' ');
+            bindMobileButton('mobileReverseBtn', 'ArrowDown');
         }
 
 
