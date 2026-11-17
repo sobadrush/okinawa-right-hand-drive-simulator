@@ -354,7 +354,7 @@
             angle: -Math.PI / 2,
             speed: 0,
             maxSpeed: 0.5,
-            acceleration: 0.006,  // 搭配 drag 0.99，終端速度約 50 km/h（原 0.004/0.985 只能到 26）
+            acceleration: 0.0035, // 搭配 drag 0.993，終端速度約 50 km/h；0→40 km/h 約 3.9 秒（原 0.006/0.99 約 1.8 秒，太衝）
             deceleration: 0.02,
             steering: 0,
             indicator: null,
@@ -964,6 +964,245 @@
         }
 
 
+        // ===== 視覺擬真升級（只影響渲染，不動遊戲邏輯、關卡、HUD、操控） =====
+        // 觸控裝置自動降級：陰影 1024、pixelRatio 上限 1.5、幾何段數 ×0.6
+        const GFX_IS_TOUCH = ((navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window) &&
+            ((window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
+        const GFX = {
+            pixelRatioCap: GFX_IS_TOUCH ? 1.5 : 2,
+            shadowMapSize: GFX_IS_TOUCH ? 1024 : 2048,
+            shadowRange: 30,           // 陰影相機涵蓋玩家周圍 ±30m（約 60m）
+            segScale: GFX_IS_TOUCH ? 0.6 : 1,
+            aniso: 1,
+            skyTop: 0x2f6fc4,          // 天頂偏深
+            skyHorizon: 0xd6ecf5,      // 地平線偏亮（霧色同此）
+            skyGround: 0x7d8f6a,
+            sunOffset: [-35, 55, -30]   // 太陽在左前上方，影子斜落在路面上
+        };
+        function gfxSeg(n) { return Math.max(6, Math.round(n * GFX.segScale)); }
+        let gfxSun = null;
+        let gfxSkyDome = null;
+        let gfxTex = null;
+
+        // r128 沒有 ColorManagement：sRGB 輸出時把 hex 色轉成線性，確保顯示色與原設計一致
+        function setLinHex(color, hex) { color.setHex(hex).convertSRGBToLinear(); }
+
+        // 可平鋪（tileable）value noise
+        function gfxHash(ix, iy, seed) {
+            let h = (ix * 374761393 + iy * 668265263 + seed * 2147483647) | 0;
+            h = Math.imul(h ^ (h >>> 13), 1274126177);
+            return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+        }
+        function gfxNoise(x, y, period, seed) {
+            const x0 = Math.floor(x), y0 = Math.floor(y);
+            const fx = x - x0, fy = y - y0;
+            const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+            const m = (v) => ((v % period) + period) % period;
+            const a = gfxHash(m(x0), m(y0), seed), b = gfxHash(m(x0 + 1), m(y0), seed);
+            const c = gfxHash(m(x0), m(y0 + 1), seed), d = gfxHash(m(x0 + 1), m(y0 + 1), seed);
+            return (a + (b - a) * sx) + ((c + (d - c) * sx) - (a + (b - a) * sx)) * sy;
+        }
+        function gfxFbm(px, py, size, periods, seed) {
+            let sum = 0, amp = 1, tot = 0;
+            periods.forEach((p, i) => {
+                sum += gfxNoise(px / size * p, py / size * p, p, seed + i * 17) * amp;
+                tot += amp; amp *= 0.55;
+            });
+            return sum / tot;
+        }
+        // 逐像素產生材質：fn(x, y, size) -> [r, g, b]
+        function gfxCanvas(size, fn) {
+            const c = document.createElement('canvas');
+            c.width = c.height = size;
+            const g = c.getContext('2d');
+            const img = g.createImageData(size, size);
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const [r, gg, b] = fn(x, y, size);
+                    const i = (y * size + x) * 4;
+                    img.data[i] = r; img.data[i + 1] = gg; img.data[i + 2] = b; img.data[i + 3] = 255;
+                }
+            }
+            g.putImageData(img, 0, 0);
+            return { canvas: c, ctx: g };
+        }
+        function gfxToTexture(canvas, isColor) {
+            const t = new THREE.CanvasTexture(canvas);
+            t.wrapS = t.wrapT = THREE.RepeatWrapping;
+            t.anisotropy = GFX.aniso;
+            t.generateMipmaps = true;
+            t.minFilter = THREE.LinearMipmapLinearFilter;
+            t.magFilter = THREE.LinearFilter;
+            if (isColor) t.encoding = THREE.sRGBEncoding;
+            return t;
+        }
+        function gfxRepeat(tex, rx, ry) {
+            const t = tex.clone();
+            t.repeat.set(rx, ry);
+            t.needsUpdate = true;
+            return t;
+        }
+        const gfxClamp = (v) => Math.max(0, Math.min(255, v));
+
+        // 程序化材質：柏油、草地、人行道磚、建築牆面（全部以 Canvas 即時產生，無外部圖檔）
+        function buildGfxTextures() {
+            if (gfxTex) return gfxTex;
+            const S = GFX_IS_TOUCH ? 256 : 512;
+
+            // 柏油：細碎骨材顆粒 + 低頻色斑（補修痕跡）
+            const asphalt = gfxCanvas(S, (x, y, s) => {
+                const n = gfxFbm(x, y, s, [4, 8, 16, 32], 11);
+                const grain = gfxHash(x, y, 3);
+                const fleck = grain > 0.985 ? 38 : (grain < 0.02 ? -22 : 0);
+                const v = 56 + (n - 0.5) * 28 + (grain - 0.5) * 26 + fleck;
+                return [gfxClamp(v), gfxClamp(v + 1), gfxClamp(v + 4)];
+            });
+            // 草地：多層綠色雜訊 + 細草紋
+            const grass = gfxCanvas(S, (x, y, s) => {
+                const n = gfxFbm(x, y, s, [3, 6, 12, 24, 48], 21);
+                const blade = gfxNoise(x / s * 160, y / s * 22, 160, 5);
+                const grain = gfxHash(x, y, 9);
+                const k = (n - 0.5) * 1.6 + (blade - 0.5) * 0.5 + (grain - 0.5) * 0.35;
+                const dry = Math.max(0, gfxNoise(x / s * 4, y / s * 4, 4, 77) - 0.62) * 2.2;
+                return [gfxClamp(64 + k * 40 + dry * 60), gfxClamp(112 + k * 48 + dry * 30), gfxClamp(42 + k * 22)];
+            });
+            // 人行道：0.5m 方磚（每塊色差）+ 灰縫 + 混凝土顆粒（材質 2m = 4×4 磚）
+            const tilePx = S / 4;
+            const sidewalk = gfxCanvas(S, (x, y, s) => {
+                const tx = Math.floor(x / tilePx), ty = Math.floor(y / tilePx);
+                const lx = x % tilePx, ly = y % tilePx;
+                const grout = (lx < 2 || ly < 2) ? -42 : ((lx < 3 || ly < 3) ? -16 : 0);
+                const tileTone = (gfxHash(tx, ty, 41) - 0.5) * 18;
+                const n = gfxFbm(x, y, s, [8, 16, 32], 31);
+                const grain = (gfxHash(x, y, 13) - 0.5) * 16;
+                const v = 168 + tileTone + (n - 0.5) * 22 + grain + grout;
+                return [gfxClamp(v), gfxClamp(v + 1), gfxClamp(v - 2)];
+            });
+            // 牆面：灰泥質感（接近白，與原本建築色相乘）+ 淡雨痕
+            const wall = gfxCanvas(GFX_IS_TOUCH ? 128 : 256, (x, y, s) => {
+                const n = gfxFbm(x, y, s, [4, 8, 16, 32], 51);
+                const streak = gfxNoise(x / s * 24, y / s * 2, 24, 61);
+                const grain = (gfxHash(x, y, 71) - 0.5) * 14;
+                const v = 238 + (n - 0.5) * 26 + grain - Math.max(0, streak - 0.6) * 40;
+                return [gfxClamp(v), gfxClamp(v), gfxClamp(v - 3)];
+            });
+
+            gfxTex = {
+                asphalt: gfxToTexture(asphalt.canvas, true),
+                asphaltBump: gfxToTexture(asphalt.canvas, false),
+                grass: gfxToTexture(grass.canvas, true),
+                sidewalk: gfxToTexture(sidewalk.canvas, true),
+                sidewalkBump: gfxToTexture(sidewalk.canvas, false),
+                wall: gfxToTexture(wall.canvas, true)
+            };
+            return gfxTex;
+        }
+
+        // 漸層天空球：地平線偏亮、天頂偏深，含柔和太陽光暈
+        function createSkyMaterial() {
+            const sunDir = new THREE.Vector3(...GFX.sunOffset).normalize();
+            return new THREE.ShaderMaterial({
+                uniforms: {
+                    topColor: { value: new THREE.Color(GFX.skyTop) },
+                    horizonColor: { value: new THREE.Color(GFX.skyHorizon) },
+                    groundColor: { value: new THREE.Color(GFX.skyGround) },
+                    sunDir: { value: sunDir },
+                },
+                vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+                fragmentShader: [
+                    'uniform vec3 topColor; uniform vec3 horizonColor; uniform vec3 groundColor; uniform vec3 sunDir;',
+                    'varying vec3 vDir;',
+                    'void main(){',
+                    '  vec3 d = normalize(vDir);',
+                    '  float h = d.y;',
+                    '  vec3 col = mix(horizonColor, topColor, pow(clamp(h, 0.0, 1.0), 0.6));',
+                    '  col = mix(col, groundColor, 1.0 - smoothstep(-0.08, 0.0, h));',
+                    '  float s = max(dot(d, normalize(sunDir)), 0.0);',
+                    '  col += vec3(1.0, 0.93, 0.78) * (pow(s, 900.0) * 1.2 + pow(s, 12.0) * 0.14);',
+                    '  col = min(col, vec3(1.0));',
+                    '  gl_FragColor = vec4(col, 1.0);',
+                    '}'
+                ].join('\n'),
+                side: THREE.BackSide,
+                depthWrite: false,
+                fog: false
+            });
+        }
+
+        function setupGfxSkyAndEnvironment() {
+            gfxSkyDome = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), createSkyMaterial());
+            gfxSkyDome.renderOrder = -1;
+            gfxSkyDome.frustumCulled = false;
+            gfxSkyDome.userData.gfxSkip = true;
+            scene.add(gfxSkyDome);
+
+            // PMREM：用與天空同色系的漸層 equirect 貼圖產生環境反射，讓車漆、玻璃、金屬有反光
+            try {
+                const hex = (h) => '#' + h.toString(16).padStart(6, '0');
+                const c = document.createElement('canvas');
+                c.width = 256; c.height = 128;
+                const g = c.getContext('2d');
+                const grad = g.createLinearGradient(0, 0, 0, 128);
+                grad.addColorStop(0, hex(GFX.skyTop));
+                grad.addColorStop(0.48, hex(GFX.skyHorizon));
+                grad.addColorStop(0.52, hex(GFX.skyGround));
+                grad.addColorStop(1, '#3f4a33');
+                g.fillStyle = grad;
+                g.fillRect(0, 0, 256, 128);
+                const envTex = new THREE.CanvasTexture(c);
+                envTex.mapping = THREE.EquirectangularReflectionMapping;
+                envTex.encoding = THREE.sRGBEncoding;
+                const pmrem = new THREE.PMREMGenerator(renderer);
+                scene.environment = pmrem.fromEquirectangular(envTex).texture;
+                pmrem.dispose();
+                envTex.dispose();
+            } catch (e) {
+                console.warn('Environment map skipped:', e);
+            }
+        }
+
+        // 每幀：陰影相機跟著玩家車移動、天空球跟著攝影機
+        function updateGfxFrame() {
+            if (gfxSun && car && car.position) {
+                const cx = car.position.x, cz = car.position.z;
+                gfxSun.position.set(cx + GFX.sunOffset[0], GFX.sunOffset[1], cz + GFX.sunOffset[2]);
+                gfxSun.target.position.set(cx, 0, cz);
+                gfxSun.target.updateMatrixWorld();
+            }
+            if (gfxSkyDome && camera) gfxSkyDome.position.copy(camera.position);
+        }
+
+        // 對場景內材質做一次性擬真處理（色彩空間、tone mapping 例外、環境反射、陰影旗標）
+        function applyRealisticMaterials(root) {
+            root.traverse((obj) => {
+                if (!(obj.isMesh || obj.isSprite) || obj.userData.gfxSkip) return;
+                const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+                let isStandard = false;
+                mats.forEach((m) => {
+                    if (!m || m.isShaderMaterial) return;
+                    if (m.isMeshStandardMaterial) isStandard = true;
+                    if (m.userData.gfxDone) return;
+                    if (m.color) m.color.convertSRGBToLinear();
+                    if (m.emissive) m.emissive.convertSRGBToLinear();
+                    if (m.map) {
+                        m.map.encoding = THREE.sRGBEncoding;
+                        m.map.anisotropy = GFX.aniso;
+                        m.map.needsUpdate = true;
+                    }
+                    // 號誌燈、標誌、導引點等 MeshBasic 自發光外觀保留原色，不經 tone mapping 變灰
+                    if (m.isMeshBasicMaterial || m.isSpriteMaterial) m.toneMapped = false;
+                    if (m.isMeshStandardMaterial) m.envMapIntensity = (m.metalness || 0) >= 0.3 ? 1.0 : 0.35;
+                    m.userData.gfxDone = true;
+                    m.needsUpdate = true;
+                });
+                if (obj.isMesh && isStandard) {
+                    obj.receiveShadow = true;
+                    if (obj.geometry && obj.geometry.type !== 'PlaneGeometry' && !obj.userData.gfxNoCast) obj.castShadow = true;
+                }
+            });
+        }
+
+
         // Setup Three.js environment
         function init3D() {
             const container = document.getElementById('canvasContainer');
@@ -974,35 +1213,61 @@
 
             try {
                 scene = new THREE.Scene();
-                scene.background = new THREE.Color(0xa5f3fc); // Sky Blue
+                // 背景與霧色 = 天空球地平線色（r128 霧在色彩編碼之後套用，故用原始 sRGB 值）
+                scene.background = new THREE.Color(GFX.skyHorizon);
                 // 霧密度調低讓遠景（海、建築、雲）可見
-                scene.fog = new THREE.FogExp2(0xa5f3fc, 0.0055);
+                scene.fog = new THREE.FogExp2(GFX.skyHorizon, 0.0055);
 
                 const aspect = container.clientWidth / container.clientHeight;
                 camera = new THREE.PerspectiveCamera(getBaseFov(aspect), aspect, 0.1, 1000);
 
-                renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('drivingCanvas'), antialias: true });
+                renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('drivingCanvas'), antialias: true, powerPreference: 'high-performance' });
                 // Retina / HiDPI 螢幕清晰度（上限 2 避免效能負擔）
-                renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, GFX.pixelRatioCap));
                 renderer.setSize(container.clientWidth, container.clientHeight);
                 renderer.shadowMap.enabled = true;
+                // 擬真渲染：sRGB 輸出 + ACES 電影色調 + 柔邊陰影
+                renderer.outputEncoding = THREE.sRGBEncoding;
+                renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                renderer.toneMappingExposure = 0.92;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                renderer.physicallyCorrectLights = false;
+                GFX.aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 
                 clock = new THREE.Clock();
 
-                // Lighting
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+                // Lighting：天空藍 / 草地綠半球光 + 少量環境光補暗部
+                const hemiLight = new THREE.HemisphereLight(0xcfe6ff, 0x6b7f45, 0.55);
+                scene.add(hemiLight);
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.08);
                 scene.add(ambientLight);
 
-                const sunLight = new THREE.DirectionalLight(0xfffbeb, 1.2);
-                sunLight.position.set(40, 60, -20);
+                // 太陽：偏暖色，陰影相機只涵蓋玩家周圍並逐幀跟車
+                const sunLight = new THREE.DirectionalLight(0xffe7c2, 2.5);
+                sunLight.position.set(...GFX.sunOffset);
                 sunLight.castShadow = true;
+                sunLight.shadow.mapSize.set(GFX.shadowMapSize, GFX.shadowMapSize);
+                sunLight.shadow.camera.left = -GFX.shadowRange;
+                sunLight.shadow.camera.right = GFX.shadowRange;
+                sunLight.shadow.camera.top = GFX.shadowRange;
+                sunLight.shadow.camera.bottom = -GFX.shadowRange;
+                sunLight.shadow.camera.near = 1;
+                sunLight.shadow.camera.far = 180;
+                sunLight.shadow.bias = -0.0004;
+                sunLight.shadow.normalBias = 0.03;
+                sunLight.shadow.radius = 3;
                 scene.add(sunLight);
+                scene.add(sunLight.target);
+                gfxSun = sunLight;
+
+                setupGfxSkyAndEnvironment();
 
                 // Dynamically build textures
                 stopTextTexture = createStopTextTexture();
                 stopSignTexture = createStopSignTexture();
 
                 buildEnvironment();
+                applyRealisticMaterials(scene);
                 isInitialized = true;
                 return true;
             } catch (e) {
@@ -1015,33 +1280,54 @@
         // Build road geometry and scene decorations
         function buildEnvironment() {
             // Grass
-            const groundGeo = new THREE.PlaneGeometry(1000, 1000);
-            const groundMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.95 });
+            const tex = buildGfxTextures();
+            // 草地：細分平面 + 頂點色做大範圍明暗變化，避免材質重複感
+            const groundGeo = new THREE.PlaneGeometry(1000, 1000, 50, 50);
+            const gPos = groundGeo.attributes.position;
+            const gCol = new Float32Array(gPos.count * 3);
+            for (let i = 0; i < gPos.count; i++) {
+                const gx = gPos.getX(i), gy = gPos.getY(i);
+                const v = 0.78 + gfxNoise(gx / 37, gy / 37, 1024, 91) * 0.3 + gfxNoise(gx / 11, gy / 11, 1024, 93) * 0.08;
+                gCol[i * 3] = v * 1.02; gCol[i * 3 + 1] = v; gCol[i * 3 + 2] = v * 0.92;
+            }
+            groundGeo.setAttribute('color', new THREE.BufferAttribute(gCol, 3));
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: gfxRepeat(tex.grass, 160, 160), vertexColors: true, roughness: 0.97 });
             const ground = new THREE.Mesh(groundGeo, groundMat);
             ground.rotation.x = -Math.PI / 2;
             ground.receiveShadow = true;
             scene.add(ground);
 
             // N-S Road & E-W Road planes
-            const roadMaterial = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 });
+            // 柏油路面：程序化顆粒材質 + bump（每 5m 一個 tile）
+            const makeRoadMat = (rx, ry) => new THREE.MeshStandardMaterial({
+                color: 0xffffff, roughness: 0.9,
+                map: gfxRepeat(tex.asphalt, rx, ry),
+                bumpMap: gfxRepeat(tex.asphaltBump, rx, ry), bumpScale: 0.012,
+                polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1
+            });
 
             const nsRoadGeo = new THREE.PlaneGeometry(16, 400);
-            const nsRoad = new THREE.Mesh(nsRoadGeo, roadMaterial);
+            const nsRoad = new THREE.Mesh(nsRoadGeo, makeRoadMat(16 / 5, 400 / 5));
             nsRoad.rotation.x = -Math.PI / 2;
             nsRoad.position.y = 0.01;
             nsRoad.receiveShadow = true;
             scene.add(nsRoad);
 
             const ewRoadGeo = new THREE.PlaneGeometry(400, 16);
-            const ewRoad = new THREE.Mesh(ewRoadGeo, roadMaterial);
+            const ewRoad = new THREE.Mesh(ewRoadGeo, makeRoadMat(400 / 5, 16 / 5));
             ewRoad.rotation.x = -Math.PI / 2;
             ewRoad.position.y = 0.01;
             ewRoad.receiveShadow = true;
             scene.add(ewRoad);
 
             // Yellow Center lines (X = 0, Z = 0)
-            const yellowLineMat = new THREE.MeshBasicMaterial({ color: 0xfabf2c });
-            const whiteLineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            // 標線：帶 roughness 的標準材質 + 微量自發光維持可讀性，polygonOffset 抗 z-fighting
+            const makePaintMat = (hex) => new THREE.MeshStandardMaterial({
+                color: hex, roughness: 0.6, emissive: hex, emissiveIntensity: 0.12,
+                polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3
+            });
+            const yellowLineMat = makePaintMat(0xfabf2c);
+            const whiteLineMat = makePaintMat(0xffffff);
 
             const nsCenterGeo = new THREE.PlaneGeometry(0.2, 400);
             const nsCenter = new THREE.Mesh(nsCenterGeo, yellowLineMat);
@@ -1117,17 +1403,18 @@
             const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1e40af, roughness: 0.9 });
             const skinMat = new THREE.MeshStandardMaterial({ color: 0xfcd9b8, roughness: 0.7 });
 
-            const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.65, 0.3), shirtMat);
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.21, 0.65, gfxSeg(18)), shirtMat);
+            body.scale.z = 0.62;
             body.position.y = 1.05;
             body.castShadow = true;
             group.add(body);
 
-            const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), skinMat);
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, gfxSeg(20), gfxSeg(16)), skinMat);
             head.position.y = 1.58;
             group.add(head);
 
             [-0.12, 0.12].forEach((lx) => {
-                const leg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.72, 0.18), pantsMat);
+                const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.07, 0.72, gfxSeg(14)), pantsMat);
                 leg.position.set(lx, 0.36, 0);
                 group.add(leg);
             });
@@ -1242,7 +1529,7 @@
             });
 
             // 四出排氣（尾部下方兩對深色圓管）
-            const exhaustGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.12, 8);
+            const exhaustGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.12, gfxSeg(16));
             exhaustGeo.rotateX(Math.PI / 2);
             [-0.55, -0.35, 0.35, 0.55].forEach((ex) => {
                 const pipe = new THREE.Mesh(exhaustGeo, darkMat);
@@ -1251,9 +1538,9 @@
             });
 
             // 車輪：胎 + 銀色輪圈盤
-            const tireGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.3, 14);
+            const tireGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.3, gfxSeg(32));
             tireGeo.rotateZ(Math.PI / 2);
-            const rimGeo = new THREE.CylinderGeometry(0.21, 0.21, 0.32, 10);
+            const rimGeo = new THREE.CylinderGeometry(0.21, 0.21, 0.32, gfxSeg(24));
             rimGeo.rotateZ(Math.PI / 2);
             const rimMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.25, metalness: 0.8 });
             [[-0.93, 1.35], [0.93, 1.35], [-0.93, -1.3], [0.93, -1.3]].forEach(([wx, wz]) => {
@@ -1299,7 +1586,7 @@
             windshield.rotation.x = -0.28;
             group.add(windshield);
 
-            const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.28, 12);
+            const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.28, gfxSeg(28));
             wheelGeo.rotateZ(Math.PI / 2);
             [[-1.05, 1.4], [1.05, 1.4], [-1.05, -1.4], [1.05, -1.4]].forEach(([wx, wz]) => {
                 const wheel = new THREE.Mesh(wheelGeo, wheelMat);
@@ -1321,20 +1608,32 @@
 
         // 路口街景：人行道、路緣角、斑馬線、車道外側白實線
         function buildStreetscape() {
-            const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.9 });
-            const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const tex = buildGfxTextures();
+            // 人行道：方磚材質（2m tile），依各段尺寸設定 repeat
+            const makeWalkMat = (rx, ry) => new THREE.MeshStandardMaterial({
+                color: 0xffffff, roughness: 0.88,
+                map: gfxRepeat(tex.sidewalk, rx, ry),
+                bumpMap: gfxRepeat(tex.sidewalkBump, rx, ry), bumpScale: 0.01
+            });
+            const nsWalkMat = makeWalkMat(1.5, 93.5);
+            const ewWalkMat = makeWalkMat(93.5, 1.5);
+            const cornerWalkMat = makeWalkMat(2.5, 2.5);
+            const whiteMat = new THREE.MeshStandardMaterial({
+                color: 0xffffff, roughness: 0.6, emissive: 0xffffff, emissiveIntensity: 0.12,
+                polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3
+            });
 
             // 人行道長條（南北路兩側、東西路兩側，各切兩段避開路口）
             const nsWalkGeo = new THREE.BoxGeometry(3, 0.14, 187);
             const ewWalkGeo = new THREE.BoxGeometry(187, 0.14, 3);
             [[-9.5, 106.5], [-9.5, -106.5], [9.5, 106.5], [9.5, -106.5]].forEach(([x, z]) => {
-                const walk = new THREE.Mesh(nsWalkGeo, sidewalkMat);
+                const walk = new THREE.Mesh(nsWalkGeo, nsWalkMat);
                 walk.position.set(x, 0.07, z);
                 walk.receiveShadow = true;
                 scene.add(walk);
             });
             [[106.5, -9.5], [-106.5, -9.5], [106.5, 9.5], [-106.5, 9.5]].forEach(([x, z]) => {
-                const walk = new THREE.Mesh(ewWalkGeo, sidewalkMat);
+                const walk = new THREE.Mesh(ewWalkGeo, ewWalkMat);
                 walk.position.set(x, 0.07, z);
                 walk.receiveShadow = true;
                 scene.add(walk);
@@ -1343,7 +1642,7 @@
             // 路口四角路緣塊
             const cornerGeo = new THREE.BoxGeometry(5, 0.14, 5);
             [[-10.5, -10.5], [10.5, -10.5], [-10.5, 10.5], [10.5, 10.5]].forEach(([x, z]) => {
-                const corner = new THREE.Mesh(cornerGeo, sidewalkMat);
+                const corner = new THREE.Mesh(cornerGeo, cornerWalkMat);
                 corner.position.set(x, 0.07, z);
                 corner.receiveShadow = true;
                 scene.add(corner);
@@ -1415,7 +1714,7 @@
             cloudPositions.forEach(([cx, cy, cz]) => {
                 const cloud = new THREE.Group();
                 [[0, 0, 0, 7], [6, -1, 2, 5], [-6, -1, -1, 5.5]].forEach(([ox, oy, oz, r]) => {
-                    const puff = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), cloudMat);
+                    const puff = new THREE.Mesh(new THREE.SphereGeometry(r, gfxSeg(20), gfxSeg(14)), cloudMat);
                     puff.position.set(ox, oy, oz);
                     cloud.add(puff);
                 });
@@ -1450,7 +1749,7 @@
 
             const body = new THREE.Mesh(
                 new THREE.BoxGeometry(w, height, d),
-                new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.85 })
+                new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.9, map: gfxRepeat(buildGfxTextures().wall, Math.max(w, d) / 3, height / 3) })
             );
             body.position.y = height / 2;
             body.castShadow = true;
@@ -1488,14 +1787,14 @@
             const group = new THREE.Group();
             group.position.set(x, 0, z);
 
-            const trunkGeo = new THREE.CylinderGeometry(0.15, 0.35, 6, 6);
+            const trunkGeo = new THREE.CylinderGeometry(0.15, 0.35, 6, gfxSeg(12), 4);
             const trunkMat = new THREE.MeshStandardMaterial({ color: 0x78350f });
             const trunk = new THREE.Mesh(trunkGeo, trunkMat);
             trunk.position.y = 3;
             trunk.castShadow = true;
             group.add(trunk);
 
-            const leafGeo = new THREE.ConeGeometry(2, 1.2, 5);
+            const leafGeo = new THREE.ConeGeometry(2, 1.2, gfxSeg(10));
             const leafMat = new THREE.MeshStandardMaterial({ color: 0x166534 });
             for (let i = 0; i < 4; i++) {
                 const leaf = new THREE.Mesh(leafGeo, leafMat);
@@ -1513,7 +1812,7 @@
         function createStopSignPost() {
             const group = new THREE.Group();
 
-            const poleGeo = new THREE.CylinderGeometry(0.08, 0.08, 7.5, 8);
+            const poleGeo = new THREE.CylinderGeometry(0.08, 0.08, 7.5, gfxSeg(20));
             const poleMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8 });
             const pole = new THREE.Mesh(poleGeo, poleMat);
             pole.position.y = 3.75;
@@ -1596,13 +1895,13 @@
             const group = new THREE.Group();
             group.position.set(9, 0, -9); // NE Corner
 
-            const poleGeo = new THREE.CylinderGeometry(0.18, 0.18, 10, 8);
+            const poleGeo = new THREE.CylinderGeometry(0.18, 0.18, 10, gfxSeg(20));
             const metalMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.75 });
             const pole = new THREE.Mesh(poleGeo, metalMat);
             pole.position.y = 5;
             group.add(pole);
 
-            const armGeo = new THREE.CylinderGeometry(0.13, 0.13, 10, 8);
+            const armGeo = new THREE.CylinderGeometry(0.13, 0.13, 10, gfxSeg(20));
             const arm = new THREE.Mesh(armGeo, metalMat);
             arm.rotation.z = Math.PI / 2;
             arm.position.set(-5, 9, 0);
@@ -1621,7 +1920,7 @@
             arrowsBox.position.set(-6, 7.8, 0.5);
             group.add(arrowsBox);
 
-            const lensGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.1, 16);
+            const lensGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.1, gfxSeg(32));
             lensGeo.rotateX(Math.PI / 2);
 
             // 三色燈由左至右為青、黃、赤。駕駛由南向北看時，本地 x 越小越靠畫面左側。
@@ -1677,20 +1976,20 @@
         // Update Traffic Light emissions dynamically in game loop
         function updateTrafficLightEmission() {
             // Dark state reset（燈色 + 光暈全暗）
-            lightsMeshGroup['red'].material.color.setHex(0x310000);
-            lightsMeshGroup['yellow'].material.color.setHex(0x313100);
-            lightsMeshGroup['green'].material.color.setHex(0x003100);
-            lightsMeshGroup['leftArrow'].material.color.setHex(0x001600);
-            lightsMeshGroup['forwardArrow'].material.color.setHex(0x001600);
-            lightsMeshGroup['rightArrow'].material.color.setHex(0x001600);
+            setLinHex(lightsMeshGroup['red'].material.color, 0x310000);
+            setLinHex(lightsMeshGroup['yellow'].material.color, 0x313100);
+            setLinHex(lightsMeshGroup['green'].material.color, 0x003100);
+            setLinHex(lightsMeshGroup['leftArrow'].material.color, 0x001600);
+            setLinHex(lightsMeshGroup['forwardArrow'].material.color, 0x001600);
+            setLinHex(lightsMeshGroup['rightArrow'].material.color, 0x001600);
             Object.keys(glowMeshGroup).forEach((name) => { glowMeshGroup[name].visible = false; });
 
             // 點亮單顆燈：燈色 + 光暈同步
             const setLit = (name, hex) => {
-                lightsMeshGroup[name].material.color.setHex(hex);
+                setLinHex(lightsMeshGroup[name].material.color, hex);
                 if (glowMeshGroup[name]) {
                     glowMeshGroup[name].visible = true;
-                    glowMeshGroup[name].material.color.setHex(hex);
+                    setLinHex(glowMeshGroup[name].material.color, hex);
                 }
             };
 
@@ -1772,7 +2071,7 @@
             const curve = new THREE.CatmullRomCurve3(curvePoints);
             const points = curve.getPoints(scenarioIndex === 2 || scenarioIndex === 5 ? 24 : 36);
 
-            const dotGeometry = new THREE.CircleGeometry(0.2, 8);
+            const dotGeometry = new THREE.CircleGeometry(0.2, gfxSeg(20));
             dotGeometry.rotateX(-Math.PI / 2);
 
             const dotMaterial = new THREE.MeshBasicMaterial({
@@ -1785,7 +2084,7 @@
             points.forEach((p, idx) => {
                 // Draw a red stopping cue circle at Z=19.5 (Stop before white line zone)
                 if ((scenarioIndex === 2 || scenarioIndex === 5) && idx === 7) {
-                    const stopGeometry = new THREE.CircleGeometry(0.55, 8);
+                    const stopGeometry = new THREE.CircleGeometry(0.55, gfxSeg(28));
                     stopGeometry.rotateX(-Math.PI / 2);
                     const stopMaterial = new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.85, depthWrite: false });
                     const stopDot = new THREE.Mesh(stopGeometry, stopMaterial);
@@ -1800,6 +2099,7 @@
 
             // 沿用目前的導引線顯示狀態（預設關閉）
             guidanceGroup.visible = guidanceVisible;
+            applyRealisticMaterials(guidanceGroup);
             scene.add(guidanceGroup);
         }
 
@@ -2108,7 +2408,7 @@
                 }
             } else if (keys['ArrowUp'] || keys['w'] || keys['W']) {
                 car.speed += car.acceleration * f;
-                car.speed *= Math.pow(0.99, f); // Air drag
+                car.speed *= Math.pow(0.993, f); // Air drag（配合較溫和的加速度）
             } else if (keys['ArrowDown'] || keys['s'] || keys['S']) {
                 // Reverse gear
                 car.speed += -car.deceleration * 0.4 * f;
@@ -2298,6 +2598,7 @@
                 }
                 updateTrafficLightEmission();
                 update3DCamera();
+                updateGfxFrame();
                 renderer.render(scene, camera);
             }
         }
@@ -2340,7 +2641,7 @@
                 camera.aspect = container.clientWidth / container.clientHeight;
                 camera.fov = getBaseFov(camera.aspect);
                 camera.updateProjectionMatrix();
-                renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, GFX.pixelRatioCap));
                 renderer.setSize(container.clientWidth, container.clientHeight);
             }
         });
