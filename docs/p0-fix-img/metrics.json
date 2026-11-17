@@ -1,0 +1,783 @@
+{
+  "a1_before_l3": [
+    {
+      "z": 40,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 226,
+      "signalOverlap": 0,
+      "signOverlap": 0,
+      "red": {
+        "x": 711.0285908706334,
+        "y": 294.14038385363517,
+        "behind": false
+      },
+      "green": {
+        "x": 737.3354763782753,
+        "y": 294.14038385363517,
+        "behind": false
+      },
+      "yellow": {
+        "x": 724.1820336244543,
+        "y": 294.14038385363517,
+        "behind": false
+      },
+      "redWorldX": 2,
+      "greenWorldX": 4,
+      "infoDisplay": "none",
+      "detailsDisplay": "block",
+      "drivingClass": false
+    },
+    {
+      "z": 32,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 226,
+      "signalOverlap": 0,
+      "signOverlap": 3973.1707331637094,
+      "red": {
+        "x": 725.3285997281644,
+        "y": 273.881334569557,
+        "behind": false
+      },
+      "green": {
+        "x": 756.9317848126697,
+        "y": 273.881334569557,
+        "behind": false
+      },
+      "yellow": {
+        "x": 741.1301922704171,
+        "y": 273.881334569557,
+        "behind": false
+      },
+      "redWorldX": 2,
+      "greenWorldX": 4,
+      "infoDisplay": "none",
+      "detailsDisplay": "block",
+      "drivingClass": false
+    },
+    {
+      "z": 26,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 226,
+      "signalOverlap": 0,
+      "signOverlap": 10424.666019021513,
+      "red": {
+        "x": 740.5043112660201,
+        "y": 252.3816634134472,
+        "behind": false
+      },
+      "green": {
+        "x": 777.728130253435,
+        "y": 252.3816634134472,
+        "behind": false
+      },
+      "yellow": {
+        "x": 759.1162207597276,
+        "y": 252.3816634134472,
+        "behind": false
+      },
+      "redWorldX": 2,
+      "greenWorldX": 4,
+      "infoDisplay": "none",
+      "detailsDisplay": "block",
+      "drivingClass": false
+    },
+    {
+      "z": 22,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 226,
+      "signalOverlap": 363.3847928066013,
+      "signOverlap": 0,
+      "red": {
+        "x": 754.0237444515792,
+        "y": 233.2284680603688,
+        "behind": false
+      },
+      "green": {
+        "x": 796.254760915127,
+        "y": 233.2284680603688,
+        "behind": false
+      },
+      "yellow": {
+        "x": 775.1392526833531,
+        "y": 233.2284680603688,
+        "behind": false
+      },
+      "redWorldX": 2,
+      "greenWorldX": 4,
+      "infoDisplay": "none",
+      "detailsDisplay": "block",
+      "drivingClass": false
+    },
+    {
+      "z": 19,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 236,
+      "signalOverlap": 2716.447508115041,
+      "signOverlap": 0,
+      "red": {
+        "x": 766.8180306119323,
+        "y": 215.10259999556095,
+        "behind": false
+      },
+      "green": {
+        "x": 813.7876715793143,
+        "y": 215.10259999556095,
+        "behind": false
+      },
+      "yellow": {
+        "x": 790.3028510956233,
+        "y": 215.10259999556095,
+        "behind": false
+      },
+      "redWorldX": 2,
+      "greenWorldX": 4,
+      "infoDisplay": "none",
+      "detailsDisplay": "block",
+      "drivingClass": false
+    }
+  ],
+  "a1_before_l7": [
+    {
+      "z": 40,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 236,
+      "signalOverlap": 0,
+      "signOverlap": 0,
+      "red": {
+        "x": 711.0285908706334,
+        "y": 294.14038385363517,
+        "behind": false
+      },
+      "green": {
+        "x": 737.3354763782753,
+        "y": 294.14038385363517,
+        "behind": false
+      },
+      "yellow": {
+        "x": 724.1820336244543,
+        "y": 294.14038385363517,
+        "behind": false
+      },
+      "redWorldX": 2,
+      "greenWorldX": 4,
+      "infoDisplay": "none",
+      "detailsDisplay": "block",
+      "drivingClass": false
+    },
+    {
+      "z": 32,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 236,
+      "signalOverlap": 0,
+      "signOverlap": 4025.3116786282885,
+      "red": {
+        "x": 725.3285997281644,
+        "y": 273.881334569557,
+        "behind": false
+      },
+      "green": {
+        "x": 756.9317848126697,
+        "y": 273.881334569557,
+        "behind": false
+      },
+      "yellow": {
+        "x": 741.1301922704171,
+        "y": 273.881334569557,
+        "behind": false
+      },
+      "redWorldX": 2,
+      "greenWorldX": 4,
+      "infoDisplay": "none",
+      "detailsDisplay": "block",
+      "drivingClass": false
+    },
+    {
+      "z": 26,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 236,
+      "signalOverlap": 0,
+      "signOverlap": 10424.666019021513,
+      "red": {
+        "x": 740.5043112660201,
+        "y": 252.3816634134472,
+        "behind": false
+      },
+      "green": {
+        "x": 777.728130253435,
+        "y": 252.3816634134472,
+        "behind": false
+      },
+      "yellow": {
+        "x": 759.1162207597276,
+        "y": 252.3816634134472,
+        "behind": false
+      },
+      "redWorldX": 2,
+      "greenWorldX": 4,
+      "infoDisplay": "none",
+      "detailsDisplay": "block",
+      "drivingClass": false
+    },
+    {
+      "z": 22,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 236,
+      "signalOverlap": 1065.164849077956,
+      "signOverlap": 0,
+      "red": {
+        "x": 754.0237444515792,
+        "y": 233.2284680603688,
+        "behind": false
+      },
+      "green": {
+        "x": 796.254760915127,
+        "y": 233.2284680603688,
+        "behind": false
+      },
+      "yellow": {
+        "x": 775.1392526833531,
+        "y": 233.2284680603688,
+        "behind": false
+      },
+      "redWorldX": 2,
+      "greenWorldX": 4,
+      "infoDisplay": "none",
+      "detailsDisplay": "block",
+      "drivingClass": false
+    },
+    {
+      "z": 19,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 236,
+      "signalOverlap": 2716.447508115041,
+      "signOverlap": 0,
+      "red": {
+        "x": 766.8180306119323,
+        "y": 215.10259999556095,
+        "behind": false
+      },
+      "green": {
+        "x": 813.7876715793143,
+        "y": 215.10259999556095,
+        "behind": false
+      },
+      "yellow": {
+        "x": 790.3028510956233,
+        "y": 215.10259999556095,
+        "behind": false
+      },
+      "redWorldX": 2,
+      "greenWorldX": 4,
+      "infoDisplay": "none",
+      "detailsDisplay": "block",
+      "drivingClass": false
+    }
+  ],
+  "b2_before": {
+    "z": 22,
+    "fov": 65,
+    "hFov": 91.09590399046121,
+    "hudBottom": 236,
+    "signalOverlap": 1065.164849077956,
+    "signOverlap": 0,
+    "red": {
+      "x": 754.0237444515792,
+      "y": 233.2284680603688,
+      "behind": false
+    },
+    "green": {
+      "x": 796.254760915127,
+      "y": 233.2284680603688,
+      "behind": false
+    },
+    "yellow": {
+      "x": 775.1392526833531,
+      "y": 233.2284680603688,
+      "behind": false
+    },
+    "redWorldX": 2,
+    "greenWorldX": 4,
+    "infoDisplay": "none",
+    "detailsDisplay": "block",
+    "drivingClass": false
+  },
+  "a2_before": {
+    "fov": 65,
+    "aspect": 0.46208530805687204,
+    "hFov": 32.806833726152384,
+    "hudBottom": 118,
+    "pedX": 0.7625199999839,
+    "pedScreen": {
+      "x": 510.08406548958425,
+      "y": 427.8346594774824,
+      "behind": false
+    }
+  },
+  "b1_before": {
+    "modal": false,
+    "pos": {
+      "x": -4,
+      "z": -128.20639135024206
+    }
+  },
+  "a1_after_l3": [
+    {
+      "z": 40,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 82,
+      "signalOverlap": 0,
+      "signOverlap": 0,
+      "red": {
+        "x": 737.3354763782753,
+        "y": 294.14038385363517,
+        "behind": false
+      },
+      "green": {
+        "x": 711.0285908706334,
+        "y": 294.14038385363517,
+        "behind": false
+      },
+      "yellow": {
+        "x": 724.1820336244543,
+        "y": 294.14038385363517,
+        "behind": false
+      },
+      "redWorldX": 4,
+      "greenWorldX": 2,
+      "infoDisplay": "flex",
+      "detailsDisplay": "none",
+      "drivingClass": true
+    },
+    {
+      "z": 32,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 82,
+      "signalOverlap": 0,
+      "signOverlap": 0,
+      "red": {
+        "x": 756.9317848126697,
+        "y": 273.881334569557,
+        "behind": false
+      },
+      "green": {
+        "x": 725.3285997281644,
+        "y": 273.881334569557,
+        "behind": false
+      },
+      "yellow": {
+        "x": 741.1301922704171,
+        "y": 273.881334569557,
+        "behind": false
+      },
+      "redWorldX": 4,
+      "greenWorldX": 2,
+      "infoDisplay": "flex",
+      "detailsDisplay": "none",
+      "drivingClass": true
+    },
+    {
+      "z": 26,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 82,
+      "signalOverlap": 0,
+      "signOverlap": 5290.09208625446,
+      "red": {
+        "x": 777.728130253435,
+        "y": 252.3816634134472,
+        "behind": false
+      },
+      "green": {
+        "x": 740.5043112660201,
+        "y": 252.3816634134472,
+        "behind": false
+      },
+      "yellow": {
+        "x": 759.1162207597276,
+        "y": 252.3816634134472,
+        "behind": false
+      },
+      "redWorldX": 4,
+      "greenWorldX": 2,
+      "infoDisplay": "flex",
+      "detailsDisplay": "none",
+      "drivingClass": true
+    },
+    {
+      "z": 22,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 82,
+      "signalOverlap": 0,
+      "signOverlap": 0,
+      "red": {
+        "x": 796.254760915127,
+        "y": 233.2284680603688,
+        "behind": false
+      },
+      "green": {
+        "x": 754.0237444515792,
+        "y": 233.2284680603688,
+        "behind": false
+      },
+      "yellow": {
+        "x": 775.1392526833531,
+        "y": 233.2284680603688,
+        "behind": false
+      },
+      "redWorldX": 4,
+      "greenWorldX": 2,
+      "infoDisplay": "flex",
+      "detailsDisplay": "none",
+      "drivingClass": true
+    },
+    {
+      "z": 19,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 102,
+      "signalOverlap": 0,
+      "signOverlap": 0,
+      "red": {
+        "x": 813.7876715793143,
+        "y": 215.10259999556095,
+        "behind": false
+      },
+      "green": {
+        "x": 766.8180306119323,
+        "y": 215.10259999556095,
+        "behind": false
+      },
+      "yellow": {
+        "x": 790.3028510956233,
+        "y": 215.10259999556095,
+        "behind": false
+      },
+      "redWorldX": 4,
+      "greenWorldX": 2,
+      "infoDisplay": "flex",
+      "detailsDisplay": "none",
+      "drivingClass": true
+    }
+  ],
+  "a1_info_expanded": {
+    "display": "block",
+    "text": "✕"
+  },
+  "a1_after_l7": [
+    {
+      "z": 40,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 102,
+      "signalOverlap": 0,
+      "signOverlap": 0,
+      "red": {
+        "x": 737.3354763782753,
+        "y": 294.14038385363517,
+        "behind": false
+      },
+      "green": {
+        "x": 711.0285908706334,
+        "y": 294.14038385363517,
+        "behind": false
+      },
+      "yellow": {
+        "x": 724.1820336244543,
+        "y": 294.14038385363517,
+        "behind": false
+      },
+      "redWorldX": 4,
+      "greenWorldX": 2,
+      "infoDisplay": "flex",
+      "detailsDisplay": "none",
+      "drivingClass": true
+    },
+    {
+      "z": 32,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 102,
+      "signalOverlap": 0,
+      "signOverlap": 0,
+      "red": {
+        "x": 756.9317848126697,
+        "y": 273.881334569557,
+        "behind": false
+      },
+      "green": {
+        "x": 725.3285997281644,
+        "y": 273.881334569557,
+        "behind": false
+      },
+      "yellow": {
+        "x": 741.1301922704171,
+        "y": 273.881334569557,
+        "behind": false
+      },
+      "redWorldX": 4,
+      "greenWorldX": 2,
+      "infoDisplay": "flex",
+      "detailsDisplay": "none",
+      "drivingClass": true
+    },
+    {
+      "z": 26,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 102,
+      "signalOverlap": 0,
+      "signOverlap": 7267.595819035182,
+      "red": {
+        "x": 777.728130253435,
+        "y": 252.3816634134472,
+        "behind": false
+      },
+      "green": {
+        "x": 740.5043112660201,
+        "y": 252.3816634134472,
+        "behind": false
+      },
+      "yellow": {
+        "x": 759.1162207597276,
+        "y": 252.3816634134472,
+        "behind": false
+      },
+      "redWorldX": 4,
+      "greenWorldX": 2,
+      "infoDisplay": "flex",
+      "detailsDisplay": "none",
+      "drivingClass": true
+    },
+    {
+      "z": 22,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 102,
+      "signalOverlap": 0,
+      "signOverlap": 0,
+      "red": {
+        "x": 796.254760915127,
+        "y": 233.2284680603688,
+        "behind": false
+      },
+      "green": {
+        "x": 754.0237444515792,
+        "y": 233.2284680603688,
+        "behind": false
+      },
+      "yellow": {
+        "x": 775.1392526833531,
+        "y": 233.2284680603688,
+        "behind": false
+      },
+      "redWorldX": 4,
+      "greenWorldX": 2,
+      "infoDisplay": "flex",
+      "detailsDisplay": "none",
+      "drivingClass": true
+    },
+    {
+      "z": 19,
+      "fov": 65,
+      "hFov": 91.09590399046121,
+      "hudBottom": 102,
+      "signalOverlap": 0,
+      "signOverlap": 0,
+      "red": {
+        "x": 813.7876715793143,
+        "y": 215.10259999556095,
+        "behind": false
+      },
+      "green": {
+        "x": 766.8180306119323,
+        "y": 215.10259999556095,
+        "behind": false
+      },
+      "yellow": {
+        "x": 790.3028510956233,
+        "y": 215.10259999556095,
+        "behind": false
+      },
+      "redWorldX": 4,
+      "greenWorldX": 2,
+      "infoDisplay": "flex",
+      "detailsDisplay": "none",
+      "drivingClass": true
+    }
+  ],
+  "b2_after": {
+    "z": 22,
+    "fov": 65,
+    "hFov": 91.09590399046121,
+    "hudBottom": 102,
+    "signalOverlap": 0,
+    "signOverlap": 0,
+    "red": {
+      "x": 796.254760915127,
+      "y": 233.2284680603688,
+      "behind": false
+    },
+    "green": {
+      "x": 754.0237444515792,
+      "y": 233.2284680603688,
+      "behind": false
+    },
+    "yellow": {
+      "x": 775.1392526833531,
+      "y": 233.2284680603688,
+      "behind": false
+    },
+    "redWorldX": 4,
+    "greenWorldX": 2,
+    "infoDisplay": "flex",
+    "detailsDisplay": "none",
+    "drivingClass": true
+  },
+  "a2_after_phone": {
+    "fov": 117.88718899603418,
+    "aspect": 0.46208530805687204,
+    "hFov": 74.99999999999999,
+    "pedX": -0.3182900000482875,
+    "pedScreen": {
+      "x": 284.4933765705112,
+      "y": 424.23843523902525,
+      "behind": false
+    }
+  },
+  "a2_after_desktop": {
+    "fov": 65,
+    "aspect": 1.6,
+    "hFov": 91.09590399046121
+  },
+  "c1": {
+    "q": {
+      "indicator": "left",
+      "left": "p-3 bg-slate-800 rounded-xl hover:bg-slate-700 transition border border-amber-500 text-amber-400 blink-active",
+      "right": "p-3 bg-slate-800 rounded-xl hover:bg-slate-700 transition border border-slate-600 text-slate-400"
+    },
+    "qRepeatStays": "left",
+    "e": {
+      "indicator": "right",
+      "right": "p-3 bg-slate-800 rounded-xl hover:bg-slate-700 transition border border-amber-500 text-amber-400 blink-active"
+    },
+    "hints": "↑ / W\n加速\nSpace\n煞車不倒車\n↓ / S\n倒車\n← →\n方向盤\nQ / E\n方向燈\nR\n重來本關"
+  },
+  "c2": {
+    "beforeBlur": 0.24375314182157465,
+    "keyAfterBlur": false,
+    "afterBlur": 0.06769699097750109,
+    "keyAfterShift": false,
+    "atRelease": 0.06769699097750109,
+    "later": 0.0188460488879476
+  },
+  "c2_visibility": true,
+  "b1_after_fail": "駛離練習路段。這段路只供路口練習，請重新挑戰本關。\n\n日本交通法規極度嚴格，請牢記：\n1. 靠左行駛。\n2. 右轉繞大圈、左轉繞小圈。",
+  "b1_after_r": {
+    "title": "1. 左轉小彎與靠左行駛",
+    "button": "啟動引擎開始挑戰 🚀",
+    "driving": false
+  },
+  "clear_desktop_l1": {
+    "title": "🎉 順利通關！",
+    "desc": "通關成功！日本左轉為小轉彎，請隨時保持緊貼左側前進。\n\n本關評價：⭐⭐⭐",
+    "pos": {
+      "x": -10.061010253627984,
+      "z": 5.235773325675525,
+      "score": "100"
+    }
+  },
+  "console_errors": [
+    "desktop L1: console: Failed to load resource: the server responded with a status of 404 (File not found)",
+    "desktop L2: console: Failed to load resource: the server responded with a status of 404 (File not found)",
+    "desktop L3: console: Failed to load resource: the server responded with a status of 404 (File not found)",
+    "desktop L10: console: Failed to load resource: the server responded with a status of 404 (File not found)",
+    "phone L1: console: Failed to load resource: the server responded with a status of 404 (File not found)",
+    "phone L2: console: Failed to load resource: the server responded with a status of 404 (File not found)",
+    "phone L3: console: Failed to load resource: the server responded with a status of 404 (File not found)",
+    "phone L10: console: Failed to load resource: the server responded with a status of 404 (File not found)"
+  ],
+  "clear_desktop_l2": {
+    "title": "🎉 順利通關！",
+    "desc": "通關成功！大彎右轉安全，且完美遵守了禮讓直行車的規範。\n\n本關評價：⭐⭐⭐",
+    "pos": {
+      "x": 10.105533019392714,
+      "z": -3.0820394207376527,
+      "score": "100"
+    }
+  },
+  "clear_desktop_l3": {
+    "title": "🎉 順利通關！",
+    "desc": "標準的「一時停止」！完美地在白線前完全停下並等候左右檢查！\n\n本關評價：⭐⭐⭐",
+    "pos": {
+      "x": -4,
+      "z": 13.79721542033364,
+      "score": "100"
+    }
+  },
+  "clear_desktop_l10": {
+    "title": "🏆 恭喜畢業！",
+    "desc": "完美禮讓！您已完成所有沖繩右駕挑戰。行人優先是日本駕駛最重要的守則，自駕旅行平安！\n\n本關評價：⭐⭐⭐\n\n您已通過所有沖繩右駕的核心練習！請保持安全駕駛意識。安全得分：100分！",
+    "pos": {
+      "x": -4,
+      "z": -10.05408484949789,
+      "score": "100"
+    }
+  },
+  "clear_phone_l1": {
+    "title": "🎉 順利通關！",
+    "desc": "通關成功！日本左轉為小轉彎，請隨時保持緊貼左側前進。\n\n本關評價：⭐⭐⭐",
+    "pos": {
+      "x": -10.038465575757964,
+      "z": 5.20002912691206,
+      "score": "100"
+    }
+  },
+  "clear_phone_l2": {
+    "title": "🎉 順利通關！",
+    "desc": "通關成功！大彎右轉安全，且完美遵守了禮讓直行車的規範。\n\n本關評價：⭐⭐⭐",
+    "pos": {
+      "x": 10.111227470269482,
+      "z": -3.0335584234137176,
+      "score": "100"
+    }
+  },
+  "clear_phone_l3": {
+    "title": "🎉 順利通關！",
+    "desc": "標準的「一時停止」！完美地在白線前完全停下並等候左右檢查！\n\n本關評價：⭐⭐⭐",
+    "pos": {
+      "x": -4,
+      "z": 13.798539156432454,
+      "score": "100"
+    }
+  },
+  "clear_phone_l10": {
+    "title": "🏆 恭喜畢業！",
+    "desc": "完美禮讓！您已完成所有沖繩右駕挑戰。行人優先是日本駕駛最重要的守則，自駕旅行平安！\n\n本關評價：⭐⭐⭐\n\n您已通過所有沖繩右駕的核心練習！請保持安全駕駛意識。安全得分：100分！",
+    "pos": {
+      "x": -4,
+      "z": -10.228259548571213,
+      "score": "100"
+    }
+  },
+  "final_opaque_overlap": {
+    "note": "與 #scenarioCard、#hudInstruction 的不透明區域重疊。z=19 到 40 每 1 單位取樣。修正靠右卡片與縮窄指示條之後。",
+    "desktop_l3": 0,
+    "desktop_l7": 0,
+    "l7_z22_redScreenX": 796.25,
+    "l7_z22_greenScreenX": 754.02,
+    "red_is_right_of_green": true
+  }
+}
