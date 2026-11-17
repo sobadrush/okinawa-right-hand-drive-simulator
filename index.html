@@ -38,8 +38,27 @@
         #mobileAccelBtn  { background: rgba(16, 185, 129, 0.85); color: #fff; border-color: rgba(110, 231, 183, 0.4); font-size: 13px; }
         #mobileReverseBtn { background: rgba(217, 119, 6, 0.8); color: #fff; border-color: rgba(252, 211, 77, 0.4); font-size: 13px; }
 
-        /* === Info Toggle Button（桌機隱藏，手機才顯示）=== */
+        /* === Info Toggle Button（未開車時桌機隱藏；開車後與手機都顯示）=== */
         #infoToggleBtn { display: none; }
+
+        /* 開車時只收合說明與進度條，並壓低頂部間距。關卡卡與指示條維持置中。
+           不用 !important：ℹ️ 寫入的 inline display 仍可把說明展開。 */
+        body.is-driving #infoToggleBtn { display: flex; }
+        body.is-driving #hudTopArea { top: 4px; gap: 4px; }
+        body.is-driving #scenarioCard {
+            padding: 6px 10px;
+            gap: 4px;
+        }
+        body.is-driving #scenarioDetails { display: none; }
+        body.is-driving #hudInstruction {
+            font-size: 13px;
+            padding: 4px 12px;
+            min-height: 28px;
+        }
+
+        /* 右下按鍵列的中文可在任意字元斷行，flex 會把它縮成一字一行。禁止縮小。
+           儀表區因此用 max-w-7xl，1280 寬才放得下整列。 */
+        #keyboardHints { flex-shrink: 0; white-space: nowrap; }
 
         /* === Guidance / Camera Toggle Buttons === */
         #guidanceToggleBtn, #cameraToggleBtn {
@@ -194,7 +213,7 @@
         <!-- Cockpit Dashboard Overlay (RHD Perspective) -->
         <div class="absolute inset-x-0 bottom-0 pointer-events-none flex flex-col items-center">
             <!-- Dashboard Grid -->
-            <div id="dashboardGrid" class="relative w-full max-w-5xl flex justify-between items-end px-12 pb-6">
+            <div id="dashboardGrid" class="relative w-full max-w-7xl flex justify-between items-end px-12 pb-6">
                 
                 <!-- Left Control: Indicator Lights & Speedometer -->
                 <div id="cockpitLeftPanel" class="bg-slate-900/90 border border-slate-700/50 backdrop-blur-md p-4 rounded-2xl shadow-2xl flex items-center gap-6 pointer-events-auto">
@@ -260,6 +279,8 @@
                         <div class="flex gap-1"><kbd class="bg-slate-800 px-1 py-0.5 rounded text-slate-200">Space</kbd> 煞車不倒車</div>
                         <div class="flex gap-1"><kbd class="bg-slate-800 px-1 py-0.5 rounded text-slate-200">↓ / S</kbd> 倒車</div>
                         <div class="flex gap-1"><kbd class="bg-slate-800 px-1 py-0.5 rounded text-slate-200">← →</kbd> 方向盤</div>
+                        <div class="flex gap-1"><kbd class="bg-slate-800 px-1 py-0.5 rounded text-slate-200">Q / E</kbd> 方向燈</div>
+                        <div class="flex gap-1"><kbd class="bg-slate-800 px-1 py-0.5 rounded text-slate-200">R</kbd> 重來本關</div>
                     </div>
 
                     <div class="h-12 w-px bg-slate-700"></div>
@@ -928,6 +949,21 @@
         }
 
 
+        // 垂直 FOV 預設 65°。直式把水平視角擠到 75° 以下時，改以水平 75° 反推，上限 120°。
+        function getBaseFov(aspect) {
+            const verticalFov = 65;
+            if (!aspect || aspect <= 0) return verticalFov;
+            const horizontalDeg = THREE.MathUtils.radToDeg(
+                2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(verticalFov) / 2) * aspect)
+            );
+            if (horizontalDeg >= 75) return verticalFov;
+            const fitted = THREE.MathUtils.radToDeg(
+                2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(75) / 2) / aspect)
+            );
+            return Math.min(120, fitted);
+        }
+
+
         // Setup Three.js environment
         function init3D() {
             const container = document.getElementById('canvasContainer');
@@ -942,7 +978,8 @@
                 // 霧密度調低讓遠景（海、建築、雲）可見
                 scene.fog = new THREE.FogExp2(0xa5f3fc, 0.0055);
 
-                camera = new THREE.PerspectiveCamera(65, container.clientWidth / container.clientHeight, 0.1, 1000);
+                const aspect = container.clientWidth / container.clientHeight;
+                camera = new THREE.PerspectiveCamera(getBaseFov(aspect), aspect, 0.1, 1000);
 
                 renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('drivingCanvas'), antialias: true });
                 // Retina / HiDPI 螢幕清晰度（上限 2 避免效能負擔）
@@ -1587,9 +1624,9 @@
             const lensGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.1, 16);
             lensGeo.rotateX(Math.PI / 2);
 
-            // Main standard lenses
+            // 三色燈由左至右為青、黃、赤。駕駛由南向北看時，本地 x 越小越靠畫面左側。
             const redLens = new THREE.Mesh(lensGeo, new THREE.MeshBasicMaterial({ color: 0x3f0000 }));
-            redLens.position.set(-7, 9, 0.95);
+            redLens.position.set(-5, 9, 0.95);
             group.add(redLens);
             lightsMeshGroup['red'] = redLens;
 
@@ -1599,7 +1636,7 @@
             lightsMeshGroup['yellow'] = yellowLens;
 
             const greenLens = new THREE.Mesh(lensGeo, new THREE.MeshBasicMaterial({ color: 0x003f00 }));
-            greenLens.position.set(-5, 9, 0.95);
+            greenLens.position.set(-7, 9, 0.95);
             group.add(greenLens);
             lightsMeshGroup['green'] = greenLens;
 
@@ -1623,7 +1660,7 @@
 
             // 每顆燈對應一個光暈 sprite，亮燈時顯示
             const glowSpecs = [
-                ['red', -7, 9, 1.7], ['yellow', -6, 9, 1.7], ['green', -5, 9, 1.7],
+                ['red', -5, 9, 1.7], ['yellow', -6, 9, 1.7], ['green', -7, 9, 1.7],
                 ['leftArrow', -7, 7.8, 1.3], ['forwardArrow', -6, 7.8, 1.3], ['rightArrow', -5, 7.8, 1.3]
             ];
             glowSpecs.forEach(([name, gx, gy, scale]) => {
@@ -1767,15 +1804,47 @@
         }
 
 
+        // 按下與放開用同一個名稱。有 code 時不看 key，避免按住 Shift 後放開變成大寫對不到。
+        function normalizeKey(e) {
+            if (e.code) {
+                switch (e.code) {
+                    case 'KeyW': return 'w';
+                    case 'KeyA': return 'a';
+                    case 'KeyS': return 's';
+                    case 'KeyD': return 'd';
+                    case 'Space': return ' ';
+                    case 'ArrowUp':
+                    case 'ArrowDown':
+                    case 'ArrowLeft':
+                    case 'ArrowRight':
+                        return e.code;
+                    default:
+                        return null;
+                }
+            }
+            if (!e.key) return null;
+            if (e.key.startsWith('Arrow')) return e.key;
+            return e.key.toLowerCase();
+        }
+
+        function releaseAllKeys() {
+            Object.keys(keys).forEach((name) => { keys[name] = false; });
+        }
+
         // Synchronize keyboard layouts and virtual buttons
         function setupControls() {
             window.addEventListener('keydown', (e) => {
-                if (e.key === ' ' || e.code === 'Space') {
-                    e.preventDefault();
-                    keys[' '] = true;
+                const name = normalizeKey(e);
+                if (name === ' ') e.preventDefault();
+                if (name) keys[name] = true;
+
+                // Q / E 方向燈、R 重來本關。忽略長按重複，避免方向燈連按開關。
+                if (!e.repeat && isInitialized) {
+                    if (e.code === 'KeyQ') toggleIndicator('left');
+                    else if (e.code === 'KeyE') toggleIndicator('right');
+                    else if (e.code === 'KeyR') loadScenario(currentScenarioIndex);
                 }
-                keys[e.key] = true;
-                
+
                 if (audioCtx && audioCtx.state === 'suspended') {
                     audioCtx.resume();
                 }
@@ -1783,10 +1852,13 @@
             });
 
             window.addEventListener('keyup', (e) => {
-                if (e.key === ' ' || e.code === 'Space') {
-                    keys[' '] = false;
-                }
-                keys[e.key] = false;
+                const name = normalizeKey(e);
+                if (name) keys[name] = false;
+            });
+
+            window.addEventListener('blur', releaseAllKeys);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') releaseAllKeys();
             });
 
             // Virtual brake pad handlers
@@ -1838,7 +1910,7 @@
         }
 
 
-        // 手機版：展開/收合關卡說明面板
+        // 展開/收合關卡說明（手機預設收合；桌機開車時也能用 ℹ️）
         function toggleScenarioDetails() {
             const details = document.getElementById('scenarioDetails');
             const btn = document.getElementById('infoToggleBtn');
@@ -1896,6 +1968,11 @@
         // Scenario load state modifier
         function loadScenario(index) {
             currentScenarioIndex = index;
+            document.body.classList.remove('is-driving');
+            const details = document.getElementById('scenarioDetails');
+            const infoBtn = document.getElementById('infoToggleBtn');
+            if (details) details.style.display = '';
+            if (infoBtn) infoBtn.textContent = 'ℹ️';
             const scenario = scenarios[index];
             
             document.getElementById('levelSelect').value = index;
@@ -1934,6 +2011,11 @@
 
         // Close Dialog to launch the game
         function startCurrentScenario() {
+            document.body.classList.add('is-driving');
+            const details = document.getElementById('scenarioDetails');
+            const infoBtn = document.getElementById('infoToggleBtn');
+            if (details) details.style.display = 'none';
+            if (infoBtn) infoBtn.textContent = 'ℹ️';
             document.getElementById('gameModal').classList.add('hidden');
             isDriving = true;
             startEngineHum();
@@ -2145,7 +2227,7 @@
                 );
                 camera.position.lerp(chaseTarget, 0.18);
                 camera.lookAt(car.position.x + forwardX * 4, 1.0, car.position.z + forwardZ * 4);
-                camera.fov += (65 - camera.fov) * 0.08;
+                camera.fov += (getBaseFov(camera.aspect) - camera.fov) * 0.08;
                 camera.updateProjectionMatrix();
                 return;
             }
@@ -2170,8 +2252,8 @@
             // 過彎微側傾（lookAt 已重置姿態，故每幀直接套用）
             camera.rotateZ(-car.steering * Math.abs(car.speed) * 1.6);
 
-            // FOV 隨速度 65 → 73 漸變，強化速度感
-            const targetFov = 65 + (Math.abs(car.speed) / car.maxSpeed) * 8;
+            // 速度感在基準 FOV 上再加最多 8°
+            const targetFov = getBaseFov(camera.aspect) + (Math.abs(car.speed) / car.maxSpeed) * 8;
             camera.fov += (targetFov - camera.fov) * 0.08;
             camera.updateProjectionMatrix();
         }
@@ -2187,6 +2269,20 @@
         }
 
 
+        // 開出練習路段，或同時離開兩條道路（路口四角的草地／人行道），就結束本關。
+        function checkOutOfBounds() {
+            const x = car.position.x;
+            const z = car.position.z;
+            if (Math.abs(x) > 40 || z < -40 || z > 70) {
+                failScenario('駛離練習路段。這段路只供路口練習，請重新挑戰本關。');
+                return;
+            }
+            if (Math.abs(x) > 9.5 && Math.abs(z) > 9.5) {
+                failScenario('駛出車道。請留在道路上行駛，不要開上草地或人行道。');
+            }
+        }
+
+
         // Safe animation update loop guarding rendering cycles
         function animateLoop() {
             requestAnimationFrame(animateLoop);
@@ -2198,6 +2294,7 @@
                 if (isDriving) {
                     updateDrivingPhysics(f);
                     scenarios[currentScenarioIndex].update(f);
+                    if (isDriving) checkOutOfBounds();
                 }
                 updateTrafficLightEmission();
                 update3DCamera();
@@ -2227,15 +2324,21 @@
         // E2E 測試與除錯用唯讀窗口（不影響遊戲邏輯）
         window.__simDebug = {
             car: car,
+            keys: keys,
+            camera: () => camera,
+            lights: () => lightsMeshGroup,
+            scene: () => scene,
             pedX: () => pedestrian ? pedestrian.position.x : null,
             pedDone: () => pedestrianDone,
-            scenarioIndex: () => currentScenarioIndex
+            scenarioIndex: () => currentScenarioIndex,
+            isDriving: () => isDriving
         };
 
         window.addEventListener('resize', () => {
             if (renderer && camera) {
                 const container = document.getElementById('canvasContainer');
                 camera.aspect = container.clientWidth / container.clientHeight;
+                camera.fov = getBaseFov(camera.aspect);
                 camera.updateProjectionMatrix();
                 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
                 renderer.setSize(container.clientWidth, container.clientHeight);
